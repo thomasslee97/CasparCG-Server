@@ -10,8 +10,8 @@ if (MSVC)
 endif ()	
 
 add_subdirectory(decklink)
-add_subdirectory(screen)
-add_subdirectory(html)
+#add_subdirectory(screen)
+#add_subdirectory(html)
 add_subdirectory(psd)
 
 if (MSVC)
