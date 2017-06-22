@@ -28,13 +28,13 @@
 
 #include <iostream>
 
-//#include <X11/Xlib.h>
+#include <X11/Xlib.h>
 
 namespace caspar {
 
 void setup_prerequisites()
 {
-//	XInitThreads();
+	XInitThreads();
 
 	std::set_terminate([]
 	{

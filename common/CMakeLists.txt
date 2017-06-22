@@ -5,6 +5,7 @@ set(SOURCES
 		diagnostics/graph.cpp
 
 		gl/gl_check.cpp
+		gl/egl_check.cpp
 
 		base64.cpp
 		env.cpp
@@ -144,6 +145,7 @@ else ()
 		sfml-system-s
 		GLEW
 		GL
+		EGL
 		X11
 		jpeg
 		sndfile

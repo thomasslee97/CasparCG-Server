@@ -35,11 +35,13 @@
 #include <common/array.h>
 #include <common/memory.h>
 #include <common/gl/gl_check.h>
+#include <common/gl/egl_check.h>
 #include <common/timer.h>
 
 #include <GL/glew.h>
 
-#include <SFML/Window/Context.hpp>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
 
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_hash_map.h>
@@ -54,6 +56,7 @@
 #include <tbb/parallel_for.h>
 
 namespace caspar { namespace accelerator { namespace ogl {
+
 		
 struct device::impl : public std::enable_shared_from_this<impl>
 {	
@@ -61,7 +64,11 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
 	tbb::concurrent_hash_map<buffer*, std::shared_ptr<texture>> texture_cache_;
 
-	std::unique_ptr<sf::Context> device_;
+//	std::unique_ptr<sf::Context> device_;
+	EGLDisplay  m_display; ///< The internal EGL display
+	EGLContext  m_context; ///< The internal EGL context
+	EGLSurface  m_surface; ///< The internal EGL surface
+	EGLConfig   m_config;  ///< The internal EGL config
 	
 	std::array<tbb::concurrent_unordered_map<std::size_t, tbb::concurrent_bounded_queue<std::shared_ptr<texture>>>, 8>	device_pools_;
 	std::array<tbb::concurrent_unordered_map<std::size_t, tbb::concurrent_bounded_queue<std::shared_ptr<buffer>>>, 2>	host_pools_;
@@ -71,7 +78,11 @@ struct device::impl : public std::enable_shared_from_this<impl>
 	executor& executor_;
 				
 	impl(executor& executor) 
-		: executor_(executor)
+		: executor_(executor),
+		m_display (EGL_NO_DISPLAY),
+		m_context (EGL_NO_CONTEXT),
+		m_surface (EGL_NO_SURFACE),
+		m_config  (NULL)
 	{
 		executor_.set_capacity(256);
 
@@ -79,8 +90,9 @@ struct device::impl : public std::enable_shared_from_this<impl>
 		
 		executor_.invoke([=]
 		{
-			device_.reset(new sf::Context());
-			device_->setActive(true);		
+			resetEGL();
+			initEGL();
+			eglCheck(eglMakeCurrent(m_display, m_surface, m_surface, m_context));
 						
 			if (glewInit() != GLEW_OK)
 				CASPAR_THROW_EXCEPTION(gl::ogl_exception() << msg_info("Failed to initialize GLEW."));
@@ -112,8 +124,80 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
 			glDeleteFramebuffers(1, &fbo_);
 
-			device_.reset();
+			resetEGL();
 		});
+	}
+
+	void resetEGL()
+	{
+		// Deactivate the current context
+		EGLContext currentContext = eglCheck(eglGetCurrentContext());
+
+		if (currentContext == m_context)
+			eglCheck(eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT));
+
+		// Destroy context
+		if (m_context != EGL_NO_CONTEXT)
+			eglCheck(eglDestroyContext(m_display, m_context));
+
+		// Destroy surface
+		if (m_surface != EGL_NO_SURFACE)
+			eglCheck(eglDestroySurface(m_display, m_surface));
+
+		if (m_display != EGL_NO_DISPLAY)
+			eglTerminate(m_display);
+	}
+
+	void initEGL()
+	{
+		static EGLDisplay display = EGL_NO_DISPLAY;
+		display = eglCheck(eglGetDisplay(EGL_DEFAULT_DISPLAY));
+
+		eglCheck(eglInitialize(display, NULL, NULL));
+		m_display = display;
+
+		const EGLint attributes[] = {
+			EGL_BLUE_SIZE, 8,
+			EGL_GREEN_SIZE, 8,
+			EGL_RED_SIZE, 8,
+			EGL_ALPHA_SIZE, 8,
+		        EGL_DEPTH_SIZE, EGL_DONT_CARE,
+//			EGL_STENCIL_SIZE, 0,
+//			EGL_SAMPLE_BUFFERS, 0,
+			EGL_SURFACE_TYPE, EGL_WINDOW_BIT | EGL_PBUFFER_BIT,
+			EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
+			EGL_NONE
+		};
+
+		EGLint configCount;
+		EGLConfig configs[1];
+
+		// Ask EGL for the best config matching our video settings
+		// TODO - seems to always return 0
+		//eglCheck(eglChooseConfig(m_display, attributes, configs, 1, &configCount));
+		eglCheck(eglGetConfigs(m_display, configs, 1, &configCount));
+		m_config = configs[0];
+
+		eglCheck(eglBindAPI(EGL_OPENGL_API));
+
+		EGLint attrib_list[] = {
+		        EGL_WIDTH, 1,
+		        EGL_HEIGHT,1,
+		        EGL_NONE
+		};
+
+		m_surface = eglCheck(eglCreatePbufferSurface(m_display, m_config, attrib_list));
+
+		const EGLint contextVersion[] = {
+			EGL_CONTEXT_MAJOR_VERSION_KHR, 3,
+			EGL_CONTEXT_MINOR_VERSION_KHR, 0,
+		        EGL_CONTEXT_CLIENT_VERSION, 1,
+		        EGL_NONE
+		};
+
+		EGLContext toShared;
+		eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+		m_context = eglCheck(eglCreateContext(m_display, m_config, EGL_NO_CONTEXT, contextVersion));
 	}
 
 	boost::property_tree::wptree info() const
@@ -412,7 +496,6 @@ std::future<array<const std::uint8_t>>		device::copy_async(const spl::shared_ptr
 std::future<void>							device::gc() { return impl_->gc(); }
 boost::property_tree::wptree				device::info() const { return impl_->info(); }
 std::wstring								device::version() const{return impl_->version();}
-
 
 }}}
 
