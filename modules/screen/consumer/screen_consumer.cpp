@@ -63,6 +63,10 @@
 #include <algorithm>
 #include <vector>
 
+#ifndef _MSC_VER
+#include <common/os/linux/x11_check.h>
+#endif
+
 #if defined(_MSC_VER)
 #pragma warning (push)
 #pragma warning (disable : 4244)
@@ -709,6 +713,13 @@ spl::shared_ptr<core::frame_consumer> create_consumer(
 	if (params.size() < 1 || !boost::iequals(params.at(0), L"SCREEN"))
 		return core::frame_consumer::empty();
 
+#ifndef _MSC_VER
+	if (!caspar::can_open_display()){
+		CASPAR_LOG(error) << L"Cannot initialise screen consumer without xserver";
+		return core::frame_consumer::empty();
+	}
+#endif
+
 	configuration config;
 
 	if (params.size() > 1)
@@ -729,6 +740,13 @@ spl::shared_ptr<core::frame_consumer> create_consumer(
 spl::shared_ptr<core::frame_consumer> create_preconfigured_consumer(
 		const boost::property_tree::wptree& ptree, core::interaction_sink* sink, std::vector<spl::shared_ptr<core::video_channel>> channels)
 {
+#ifndef _MSC_VER
+        if (!caspar::can_open_display()){
+                CASPAR_LOG(error) << L"Cannot initialise screen consumer without xserver";
+                return core::frame_consumer::empty();
+        }
+#endif
+
 	configuration config;
 	config.name				= ptree.get(L"name",				config.name);
 	config.screen_index		= ptree.get(L"device",				config.screen_index + 1) - 1;

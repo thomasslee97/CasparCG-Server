@@ -56,7 +56,6 @@
 #include <tbb/parallel_for.h>
 
 namespace caspar { namespace accelerator { namespace ogl {
-
 		
 struct device::impl : public std::enable_shared_from_this<impl>
 {	
@@ -64,7 +63,6 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
 	tbb::concurrent_hash_map<buffer*, std::shared_ptr<texture>> texture_cache_;
 
-//	std::unique_ptr<sf::Context> device_;
 	EGLDisplay  m_display; ///< The internal EGL display
 	EGLContext  m_context; ///< The internal EGL context
 	EGLSurface  m_surface; ///< The internal EGL surface
@@ -496,6 +494,7 @@ std::future<array<const std::uint8_t>>		device::copy_async(const spl::shared_ptr
 std::future<void>							device::gc() { return impl_->gc(); }
 boost::property_tree::wptree				device::info() const { return impl_->info(); }
 std::wstring								device::version() const{return impl_->version();}
+
 
 }}}
 

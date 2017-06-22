@@ -34,6 +34,10 @@
 #include <common/os/threading.h>
 #include <common/timer.h>
 
+#ifndef _MSC_VER
+#include <common/os/linux/x11_check.h>
+#endif
+
 #include <SFML/Graphics.hpp>
 
 #include <boost/optional.hpp>
@@ -45,7 +49,6 @@
 #include <tbb/spin_mutex.h>
 
 #include <GL/glew.h>
-#include <X11/Xlib.h>
 
 #include <numeric>
 #include <tuple>
@@ -147,11 +150,13 @@ private:
 		{
 			if(!window_)
 			{
-				if(!can_open_display())
+#ifndef _MSC_VER
+				if(!caspar::can_open_display())
 				{
 					CASPAR_LOG(error) << L"Cannot show DIAG without xserver";
 					return;
 				}
+#endif
 
 				window_.reset(new sf::RenderWindow(sf::VideoMode(RENDERING_WIDTH, RENDERING_WIDTH), "CasparCG Diagnostics"));
 				window_->setPosition(sf::Vector2i(0, 0));
@@ -168,16 +173,6 @@ private:
 		}
 		else
 			window_.reset();
-	}
-
-	bool can_open_display()
-	{
-		Display* display = XOpenDisplay(NULL);
-		if (!display)
-			return false;
-
-		XCloseDisplay(display);
-		return true;
 	}
 
 	void tick()

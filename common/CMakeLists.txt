@@ -42,6 +42,7 @@ elseif (CMAKE_COMPILER_IS_GNUCXX)
 			os/linux/threading.cpp
 			os/linux/stack_trace.cpp
 			os/linux/system_info.cpp
+			os/linux/x11_check.cpp
 	)
 endif ()
 set(HEADERS
