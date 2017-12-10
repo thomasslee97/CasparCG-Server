@@ -429,8 +429,10 @@ struct decklink_consumer
 
     tbb::concurrent_bounded_queue<std::pair<core::frame_timecode, core::const_frame>> frame_buffer_;
     caspar::semaphore                                                                 ready_for_new_frames_{0};
+    std::int64_t                                                                        frame_count = 0;
 
     spl::shared_ptr<diagnostics::graph>               graph_;
+    core::monitor::subject                              subject_;
     caspar::timer                                     tick_timer_;
     reference_signal_detector                         reference_signal_detector_{output_};
     tbb::atomic<int64_t>                              current_presentation_delay_;
@@ -510,6 +512,11 @@ struct decklink_consumer
                 output_->DisableAudioOutput();
             output_->DisableVideoOutput();
         }
+    }
+
+    core::monitor::subject& monitor_output()
+    {
+        return subject_;
     }
 
     void enable_audio()
@@ -689,6 +696,11 @@ struct decklink_consumer
 
         ready_for_new_frames_.acquire(1, [send_completion] { send_completion->set_value(true); });
 
+        frame_count++;
+
+        subject_
+            << core::monitor::message("/frame") % frame_count;
+
         return send_completion->get_future();
     }
 
@@ -782,7 +794,14 @@ struct decklink_consumer_proxy : public core::frame_consumer
         return consumer_ ? static_cast<int64_t>(consumer_->current_presentation_delay_) : 0;
     }
 
-    core::monitor::subject& monitor_output() { return monitor_subject_; }
+    core::monitor::subject& monitor_output() {
+        if (consumer_) {
+            return consumer_->monitor_output();
+        }
+        else {
+            return monitor_subject_;
+        }
+    }
 };
 
 const software_version<3>& get_driver_version()
