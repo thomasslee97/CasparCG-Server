@@ -395,8 +395,10 @@ struct decklink_consumer : public IDeckLinkVideoOutputCallback, boost::noncopyab
 
 	tbb::concurrent_bounded_queue<core::const_frame>	frame_buffer_;
 	caspar::semaphore									ready_for_new_frames_	{ 0 };
+	std::int64_t										frame_count				= 0;
 
 	spl::shared_ptr<diagnostics::graph>					graph_;
+	core::monitor::subject								subject_;
 	caspar::timer										tick_timer_;
 	reference_signal_detector							reference_signal_detector_	{ output_ };
 	tbb::atomic<int64_t>								current_presentation_delay_;
@@ -479,6 +481,11 @@ public:
 				output_->DisableAudioOutput();
 			output_->DisableVideoOutput();
 		}
+	}
+
+	core::monitor::subject& monitor_output()
+	{
+		return subject_;
 	}
 
 	void enable_audio()
@@ -645,6 +652,11 @@ public:
 			send_completion->set_value(true);
 		});
 
+		frame_count++;
+
+		subject_
+			<< core::monitor::message("/frame") % frame_count;
+
 		return send_completion->get_future();
 	}
 
@@ -666,7 +678,6 @@ public:
 template <typename Configuration>
 struct decklink_consumer_proxy : public core::frame_consumer
 {
-	core::monitor::subject								monitor_subject_;
 	const configuration									config_;
 	std::unique_ptr<decklink_consumer<Configuration>>	consumer_;
 	core::video_format_desc								format_desc_;
@@ -757,7 +768,7 @@ public:
 
 	core::monitor::subject& monitor_output()
 	{
-		return monitor_subject_;
+		return consumer_->monitor_output();
 	}
 };
 
