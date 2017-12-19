@@ -50,6 +50,8 @@ copy ..\shell\casparcg_auto_restart.bat "%SERVER_FOLDER%\server" || goto :error
 copy shell\casparcg.config "%SERVER_FOLDER%\server" || goto :error
 copy shell\*.ttf "%SERVER_FOLDER%\server" || goto :error
 copy shell\*.pak "%SERVER_FOLDER%\server" || goto :error
+copy shell\*.bin "%SERVER_FOLDER%\server" || goto :error
+copy shell\*.dat "%SERVER_FOLDER%\server" || goto :error
 xcopy shell\locales "%SERVER_FOLDER%\server\locales" /E /I /Y || goto :error
 
 :: Copy documentation
