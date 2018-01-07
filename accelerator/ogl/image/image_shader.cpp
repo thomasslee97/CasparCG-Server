@@ -200,6 +200,10 @@ std::string get_fragment(bool blend_modes, bool post_processing)
 			uniform float		brt;
 			uniform float		sat;
 			uniform float		con;
+	
+			uniform bool		blur;
+			uniform int			blur_samples;
+			uniform vec2		blur_vector;
 
 			uniform bool		post_processing;
 			uniform bool		straighten_alpha;
@@ -319,9 +323,28 @@ std::string get_fragment(bool blend_modes, bool post_processing)
 
 				return color;
 			}
+	
+			vec4 get_blur_pixel(sampler2D sampler, vec2 vTexcoord, int nSamples)
+			{
+				vec4 result = vec4(0.0, 0.0, 0.0, 0.0);
+				for (int i = 0; i < nSamples; ++i) {
+					// get offset in range [-0.5, 0.5]:
+					vec2 offset = blur_vector * (float(i) / float(nSamples - 1) - 0.5);
+  
+					// sample & add to result:
+					result += texture2D(sampler, vTexcoord + offset);
+				}
+ 
+				return result / float(nSamples);
+			}
 
 			void main()
 			{
+				if (blur)
+				{
+					gl_FragColor = get_blur_pixel(plane[0], gl_TexCoord[0].st, blur_samples).rgba;
+				}
+				else
 	)shader"
 
 	+
