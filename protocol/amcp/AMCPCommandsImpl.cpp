@@ -2229,7 +2229,7 @@ std::future<std::wstring> mixer_perspective_command(command_context& ctx)
 void mixer_blur_describer(core::help_sink& sink, const core::help_repository& repo)
 {
     sink.short_description(L"Change the blur of a layer.");
-    sink.syntax(L"MIXER [video_channel:int]{-[layer:int]|-0} BLUR {[x:int] [y:int]" + ANIMATION_SYNTAX);
+    sink.syntax(L"MIXER [video_channel:int]{-[layer:int]|-0} BLUR_XY {[x:int] [y:int]" + ANIMATION_SYNTAX);
     sink.para()->text(L"Changes the blur of the specified layer, or returns the current values if no arguments are given.");
     sink.para()
         ->text(L"The blur is a measured in number of pixels.");
@@ -2237,39 +2237,44 @@ void mixer_blur_describer(core::help_sink& sink, const core::help_repository& re
         ->item(L"x", L"The x blur radius.")
         ->item(L"y", L"The y blur radius.");
     sink.para()->text(L"Examples:");
-    sink.example(L">> MIXER 1-10 BLUR 5 6 25 easeinsine", L"sets the blur strength");
+    sink.example(L">> MIXER 1-10 BLUR_XY 5 6 25 easeinsine", L"sets the blur strength");
     sink.example(
-        L">> MIXER 1-10 BLUR\n"
+        L">> MIXER 1-10 BLUR_XY\n"
         L"<< 201 MIXER OK\n"
-        L"<< 5 6", L"gets the blur point");
+        L"<< 5 6", L"gets the blur amount");
 }
 
-std::wstring mixer_blur_command(command_context& ctx)
+std::future<std::wstring> mixer_blur_command(command_context& ctx)
 {
-    if (ctx.parameters.empty())
-    {
-        auto transform = get_current_transform(ctx).image_transform;
-        auto blur = transform.blur;
-        return L"201 MIXER OK\r\n"
-            + boost::lexical_cast<std::wstring>(blur[0]) + L" "
-            + boost::lexical_cast<std::wstring>(blur[1]) + L"\r\n";
+    if (ctx.parameters.empty()) {
+        auto transform2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [transform2]() -> std::wstring {
+            auto transform = transform2.get().image_transform;
+            auto blur = transform.blur;
+            return L"201 MIXER OK\r\n"
+                + boost::lexical_cast<std::wstring>(blur[0]) + L" "
+                + boost::lexical_cast<std::wstring>(blur[1]) + L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
-    int duration = ctx.parameters.size() > 2 ? boost::lexical_cast<int>(ctx.parameters[2]) : 0;
-    std::wstring tween = ctx.parameters.size() > 3 ? ctx.parameters[3] : L"linear";
+    int                duration = ctx.parameters.size() > 4 ? boost::lexical_cast<int>(ctx.parameters[4]) : 0;
+    std::wstring       tween = ctx.parameters.size() > 5 ? ctx.parameters[5] : L"linear";
     double x = boost::lexical_cast<double>(ctx.parameters.at(0));
     double y = boost::lexical_cast<double>(ctx.parameters.at(1));
 
-    transforms.add(stage::transform_tuple_t(ctx.layer_index(), [=](frame_transform transform) mutable -> frame_transform
-        {
+    transforms.add(stage::transform_tuple_t(ctx.layer_index(),
+        [=](frame_transform transform) mutable -> frame_transform {
             transform.image_transform.blur[0] = x;
             transform.image_transform.blur[1] = y;
             return transform;
-        }, duration, tween));
+        },
+        duration,
+            tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 
@@ -3433,7 +3438,7 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_channel_command(L"Mixer Commands", L"MIXER CLIP", mixer_clip_describer, mixer_clip_command, 0);
     repo->register_channel_command(L"Mixer Commands", L"MIXER ANCHOR", mixer_anchor_describer, mixer_anchor_command, 0);
     repo->register_channel_command(L"Mixer Commands", L"MIXER CROP", mixer_crop_describer, mixer_crop_command, 0);
-    repo->register_channel_command(L"Mixer Commands", L"MIXER BLUR", mixer_blur_describer, mixer_blur_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER BLUR_XY", mixer_blur_describer, mixer_blur_command, 0);
     repo->register_channel_command(
         L"Mixer Commands", L"MIXER ROTATION", mixer_rotation_describer, mixer_rotation_command, 0);
     repo->register_channel_command(
