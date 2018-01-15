@@ -368,7 +368,7 @@ struct image_kernel::impl
 		bool scissor = m_p[0] > std::numeric_limits<double>::epsilon()			|| m_p[1] > std::numeric_limits<double>::epsilon() ||
 					   m_s[0] < (1.0 - std::numeric_limits<double>::epsilon())	|| m_s[1] < (1.0 - std::numeric_limits<double>::epsilon());
 
-		if (scissor)
+		if (scissor)// && !has_blur)
 		{
 			double w = static_cast<double>(params.background->width());
 			double h = static_cast<double>(params.background->height());
@@ -477,7 +477,7 @@ struct image_kernel::impl
 			shader_->set("post_processing", false);
 			shader_->set("straighten_alpha", false);
 
-			const auto samples = std::ceil(std::sqrt(blur_x * blur_x + blur_y * blur_y) * 4);						
+			const auto samples = std::ceil(std::sqrt(blur_x * blur_x + blur_y * blur_y));
 			shader_->set("blur_samples", static_cast<int>(samples));
 			shader_->set("blur_vector",
 				static_cast<float>(-blur_x) / params.background->width(),
