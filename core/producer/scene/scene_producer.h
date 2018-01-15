@@ -190,6 +190,12 @@ public:
 			return;
 		}
 
+		if (has_keyframe(to_affect.identity(), at_frame))
+		{
+			CASPAR_LOG(warning) << "Found duplicate keyframe " << at_frame;
+			return;
+		}
+
 		tweener tween(easing);
 		keyframe k(at_frame);
 
@@ -222,7 +228,6 @@ public:
 					//CASPAR_LOG(info) << relative_frame << L" " << *start_value << L" " << duration << L" " << tweened;
 				};
 
-		// TODO - this can exception is two keyframes have the same number
 		store_keyframe(to_affect.identity(), k);
 	}
 
@@ -235,6 +240,12 @@ public:
 	template<typename T>
 	void add_keyframe(binding<T>& to_affect, const binding<T>& set_value, int64_t at_frame)
 	{
+		if (has_keyframe(to_affect.identity(), at_frame))
+		{
+			CASPAR_LOG(warning) << "Found duplicate keyframe " << at_frame;
+			return;
+		}
+
 		keyframe k(at_frame);
 
 		k.on_destination_frame = [=]() mutable
@@ -251,6 +262,7 @@ public:
 	core::variable& get_variable(const std::wstring& name) override;
 	const std::vector<std::wstring>& get_variables() const override;
 private:
+	bool has_keyframe(void* timeline_identity, const int64_t k);
 	void store_keyframe(void* timeline_identity, const keyframe& k);
 	void store_variable(
 			const std::wstring& name, const std::shared_ptr<core::variable>& var);
