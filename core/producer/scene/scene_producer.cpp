@@ -613,7 +613,7 @@ struct scene_producer::impl
 	{
 		for (int i = 0; i + 1 < params.size(); i += 2)
 		{
-			auto found = variables_.find(boost::to_lower_copy(params.at(i)));
+			auto found = variables_.find(params.at(i));
 
 			if (found != variables_.end() && found->second->is_public())
 				found->second->from_string(params.at(i + 1));
