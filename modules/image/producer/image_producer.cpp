@@ -132,8 +132,10 @@ struct image_producer : public core::frame_producer_base
 
 		std::copy_n(FreeImage_GetBits(bitmap.get()), frame.image_data().size(), frame.image_data().begin());
 		frame_ = core::draw_frame(std::move(frame));
-		constraints_.width.set(FreeImage_GetWidth(bitmap.get()));
-		constraints_.height.set(FreeImage_GetHeight(bitmap.get()));
+		if (!constraints_.width.bound())
+			constraints_.width.set(FreeImage_GetWidth(bitmap.get()));
+		if (!constraints_.height.bound())
+			constraints_.height.set(FreeImage_GetHeight(bitmap.get()));
 	}
 
 	std::future<std::wstring> call(const std::vector<std::wstring>& param) override
