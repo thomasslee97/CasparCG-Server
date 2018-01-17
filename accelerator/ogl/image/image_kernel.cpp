@@ -317,7 +317,8 @@ struct image_kernel::impl
 		// Check if the blur post step needs to be performed
 		const int blur_x = static_cast<int>(params.transform.blur[0] * std::cos(angle) + params.transform.blur[1] * std::sin(angle));
 		const int blur_y = static_cast<int>(params.transform.blur[1] * std::cos(angle) + params.transform.blur[0] * std::sin(angle));
-		const bool has_blur = blur_x > 0 || blur_y > 0;
+		const int blur_samples = static_cast<int>(std::ceil(std::sqrt(blur_x * blur_x + blur_y * blur_y)));
+		const bool has_blur = blur_samples > 0;
 
 		// Set render target
 		std::shared_ptr<texture> composite_texture = params.background;
@@ -560,8 +561,7 @@ struct image_kernel::impl
 			shader_->set("post_processing", false);
 			shader_->set("straighten_alpha", false);
 
-			const auto samples = std::ceil(std::sqrt(blur_x * blur_x + blur_y * blur_y));
-			shader_->set("blur_samples", static_cast<int>(samples));
+			shader_->set("blur_samples", static_cast<int>(blur_samples));
 			shader_->set("blur_vector",
 				static_cast<float>(-blur_x) / params.background->width(),
 				static_cast<float>(blur_y) / params.background->height());

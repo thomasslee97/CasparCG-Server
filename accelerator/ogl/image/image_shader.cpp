@@ -328,9 +328,9 @@ std::string get_fragment(bool blend_modes, bool post_processing)
 			{
 				vec4 result = vec4(0.0, 0.0, 0.0, 0.0);
 				vec2 step = blur_vector / float(nSamples);
-				vec2 coord = vTexcoord - (0.5 * float(nSamples + 1) * step);
+				vec2 coord = vTexcoord - (0.5 * float(nSamples) * step);
 
-				for (int i = 0; i < nSamples; ++i) {
+				for (int i = 0; i <= nSamples; ++i) {
 					result += texture2D(plane[0], coord);
 					coord += step;
 				}
