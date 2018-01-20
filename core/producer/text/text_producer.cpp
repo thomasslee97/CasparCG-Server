@@ -143,9 +143,10 @@ struct text_producer::impl
 	variable_impl<double>					current_bearing_y_;
 	variable_impl<double>					current_protrude_under_y_;
 	draw_frame								frame_;
-	text::texture_atlas						atlas_						{ 1024, 512, 4 };
+	text::texture_atlas_set					atlas_						{ 1024, 1024, 4 };
+	std::vector<const_frame>				atlas_frames_;
 	text::texture_font						font_;
-	const_frame								atlas_frame_;
+	text::color<double>						color_;
 
 public:
 	explicit impl(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone)
@@ -153,14 +154,11 @@ public:
 		, x_(x), y_(y)
 		, parent_width_(parent_width), parent_height_(parent_height)
 		, standalone_(standalone)
-		, font_(atlas_, text::find_font_file(text_info), !standalone)
+		, font_(atlas_, text::find_font_file(text_info), !standalone, text_info.color)
+		, color_(text_info.color)
 	{
-		//TODO: examine str to determine which unicode_blocks to load
-		font_.load_glyphs(text::unicode_block::Basic_Latin, text_info.color);
-		font_.load_glyphs(text::unicode_block::Latin_1_Supplement, text_info.color);
-		font_.load_glyphs(text::unicode_block::Latin_Extended_A, text_info.color);
-
-		atlas_frame_ = create_atlas_frame();
+		font_.load_blocks_for_string(str);
+		atlas_frames_ = create_atlas_frames();
 
 		tracking_.value().set(text_info.tracking);
 		scale_x_.value().set(text_info.scale_x);
@@ -186,28 +184,64 @@ public:
 		CASPAR_LOG(info) << print() << L" Initialized";
 	}
 
-	core::const_frame create_atlas_frame() const
+	std::vector<core::const_frame> create_atlas_frames() const
 	{
-		core::pixel_format_desc pfd(core::pixel_format::bgra);
-		pfd.planes.push_back(core::pixel_format_desc::plane(static_cast<int>(atlas_.width()), static_cast<int>(atlas_.height()), static_cast<int>(atlas_.depth())));
-		auto frame = frame_factory_->create_frame(this, pfd, core::audio_channel_layout::invalid());
-		memcpy(frame.image_data().data(), atlas_.data(), frame.image_data().size());
-		return std::move(frame);
+		std::vector<core::const_frame> res;
+
+		for (int i = 0; i < atlas_.size(); i++)
+		{
+			core::pixel_format_desc pfd(core::pixel_format::bgra);
+			pfd.planes.push_back(core::pixel_format_desc::plane(static_cast<int>(atlas_.width()), static_cast<int>(atlas_.height()), static_cast<int>(atlas_.depth())));
+			auto frame = frame_factory_->create_frame(this, pfd, core::audio_channel_layout::invalid());
+			memcpy(frame.image_data().data(), atlas_.data(i), frame.image_data().size());
+			res.push_back(std::move(frame));
+		}
+
+		return res;
 	}
 
 	void generate_frame()
 	{
+		const std::wstring str = text_.value().get();
+		const bool updated_atlas = font_.load_blocks_for_string(str);
+		if (updated_atlas)
+			atlas_frames_ = create_atlas_frames();
+
 		text::string_metrics metrics;
 		font_.set_tracking(tracking_.value().get());
 
-		auto vertex_stream = font_.create_vertex_stream(text_.value().get(), x_, y_, parent_width_, parent_height_, &metrics, shear_.value().get());
-		auto frame = atlas_frame_.with_geometry(frame_geometry(frame_geometry::geometry_type::quad_list, std::move(vertex_stream)));
+		std::vector<text::text_char> vertex_stream = font_.create_vertex_stream(str, x_, y_, parent_width_, parent_height_, &metrics, shear_.value().get());
+
+		std::vector<draw_frame> res;
+		for (auto it = atlas_frames_.begin(); it != atlas_frames_.end(); ++it)
+		{
+			const int index = static_cast<int>(it - atlas_frames_.begin());
+
+			std::vector<frame_geometry::coord> coords;
+			for (auto it2 = vertex_stream.begin(); it2 != vertex_stream.end(); ++it2) 
+			{
+				if (it2->atlas_index != index)
+					continue;
+
+				coords.push_back(it2->ul_coord);
+				coords.push_back(it2->ur_coord);
+				coords.push_back(it2->lr_coord);
+				coords.push_back(it2->ll_coord);
+			}
+
+			if (coords.size() == 0)
+				continue;
+
+			const_frame frame = it->with_geometry(frame_geometry(frame_geometry::geometry_type::quad_list, std::move(coords)));
+
+			res.push_back(std::move(draw_frame(std::move(frame))));
+		}
 
 		this->constraints_.width.set(metrics.width * this->scale_x_.value().get());
 		this->constraints_.height.set(metrics.height * this->scale_y_.value().get());
 		current_bearing_y_.value().set(metrics.bearingY);
 		current_protrude_under_y_.value().set(metrics.protrudeUnderY);
-		frame_ = core::draw_frame(std::move(frame));
+		frame_ = draw_frame(std::move(res));
 	}
 
 	// frame_producer
