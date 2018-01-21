@@ -117,6 +117,7 @@ class decklink_producer : boost::noncopyable, public IDeckLinkInputCallback
 																			in_format_desc_.framerate,
 																			{ ffmpeg::create_input_pad(in_format_desc_, channel_layout_.num_channels) },
 																			frame_factory_,
+																			format_repository_, // TODO - will this work?
 																			out_format_desc_,
 																			channel_layout_,
 																			filter_,
@@ -129,9 +130,11 @@ class decklink_producer : boost::noncopyable, public IDeckLinkInputCallback
 	core::draw_frame								last_frame_			= core::draw_frame::empty();
 
 	std::exception_ptr								exception_;
+	const core::video_format_repository format_repository_;
 
 public:
 	decklink_producer(
+			const core::video_format_repository format_repository,
 			const core::video_format_desc& in_format_desc,
 			int device_index,
 			const spl::shared_ptr<core::frame_factory>& frame_factory,
@@ -140,6 +143,7 @@ public:
 			const std::wstring& filter)
 		: device_index_(device_index)
 		, filter_(filter)
+		, format_repository_(format_repository)
 		, in_format_desc_(in_format_desc)
 		, out_format_desc_(out_format_desc)
 		, frame_factory_(frame_factory)
@@ -356,6 +360,7 @@ class decklink_producer_proxy : public core::frame_producer_base
 	executor							executor_;
 public:
 	explicit decklink_producer_proxy(
+			const core::video_format_repository& format_repository,
 			const core::video_format_desc& in_format_desc,
 			const spl::shared_ptr<core::frame_factory>& frame_factory,
 			const core::video_format_desc& out_format_desc,
@@ -371,7 +376,7 @@ public:
 		{
 			core::diagnostics::call_context::for_thread() = ctx;
 			com_initialize();
-			producer_.reset(new decklink_producer(in_format_desc, device_index, frame_factory, out_format_desc, channel_layout, filter_str));
+			producer_.reset(new decklink_producer(format_repository, in_format_desc, device_index, frame_factory, out_format_desc, channel_layout, filter_str));
 		});
 	}
 
@@ -458,7 +463,7 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
 
 	auto filter_str		= get_param(L"FILTER", params);
 	auto length			= get_param(L"LENGTH", params, std::numeric_limits<uint32_t>::max());
-	auto in_format_desc = core::video_format_desc(get_param(L"FORMAT", params, L"INVALID"));
+	auto in_format_desc = dependencies.format_repository.find(get_param(L"FORMAT", params, L"INVALID"));
 
 	if(in_format_desc.format == core::video_format::invalid)
 		in_format_desc = dependencies.format_desc;
@@ -481,6 +486,7 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
 	boost::ireplace_all(filter_str, L"DEINTERLACE",		L"YADIF=0:-1");
 
 	auto producer = spl::make_shared<decklink_producer_proxy>(
+			dependencies.format_repository,
 			in_format_desc,
 			dependencies.frame_factory,
 			dependencies.format_desc,

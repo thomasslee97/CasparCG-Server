@@ -214,14 +214,14 @@ public:
 	}
 };
 
-core::video_format_desc get_progressive_format(core::video_format_desc format_desc)
+core::video_format_desc get_progressive_format(const core::video_format_repository format_repository, core::video_format_desc format_desc)
 {
 	if (format_desc.field_count == 1)
 		return format_desc;
 
 	format_desc.framerate		*= 2;
 	format_desc.fps				*= 2.0;
-	format_desc.audio_cadence	 = core::find_audio_cadence(format_desc.framerate);
+	format_desc.audio_cadence	 = format_repository.find_audio_cadence(format_desc.framerate);
 	format_desc.time_scale		*= 2;
 	format_desc.field_count		 = 1;
 
@@ -253,7 +253,8 @@ public:
 				channel->video_format_desc().framerate,
 				{ ffmpeg::create_input_pad(channel->video_format_desc(), channel->audio_channel_layout().num_channels) },
 				dependecies.frame_factory,
-				no_auto_deinterlace ? channel->video_format_desc() : get_progressive_format(channel->video_format_desc()),
+				dependecies.format_repository,
+				no_auto_deinterlace ? channel->video_format_desc() : get_progressive_format(dependecies.format_repository, channel->video_format_desc()),
 				channel->audio_channel_layout(),
 				L"",
 				false,

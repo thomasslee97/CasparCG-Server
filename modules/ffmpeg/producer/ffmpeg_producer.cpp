@@ -106,6 +106,7 @@ struct ffmpeg_producer : public core::frame_producer_base
 public:
 	explicit ffmpeg_producer(
 			const spl::shared_ptr<core::frame_factory>& frame_factory,
+			const core::video_format_repository format_repository,
 			const core::video_format_desc& format_desc,
 			const std::wstring& url_or_file,
 			const std::wstring& filter,
@@ -206,7 +207,7 @@ public:
 		if (!video_decoder_ && audio_decoders_.empty())
 			CASPAR_THROW_EXCEPTION(averror_stream_not_found() << msg_info("No streams found"));
 
-		muxer_.reset(new frame_muxer(framerate_, std::move(audio_input_pads), frame_factory, format_desc, channel_layout, filter, true));
+		muxer_.reset(new frame_muxer(framerate_, std::move(audio_input_pads), frame_factory, format_repository, format_desc, channel_layout, filter, true));
 
 		if (auto nb_frames = file_nb_frames())
 		{
@@ -720,6 +721,7 @@ spl::shared_ptr<core::frame_producer> create_producer(
 
 	auto producer = spl::make_shared<ffmpeg_producer>(
 			dependencies.frame_factory,
+			dependencies.format_repository,
 			dependencies.format_desc,
 			file_or_url,
 			filter_str,
@@ -763,6 +765,7 @@ core::draw_frame create_thumbnail_frame(
 	ffmpeg_options vid_params;
 	auto producer = spl::make_shared<ffmpeg_producer>(
 			dependencies.frame_factory,
+			dependencies.format_repository,
 			dependencies.format_desc,
 			filename,
 			filter_str,

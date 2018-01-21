@@ -38,6 +38,7 @@ namespace amcp {
 		channel_context											channel;
 		int														channel_index;
 		int														layer_id;
+		core::video_format_repository							format_repository;
 		std::vector<channel_context>							channels;
 		spl::shared_ptr<core::help_repository>					help_repo;
 		spl::shared_ptr<core::media_info_repository>			media_info_repo;
@@ -57,6 +58,7 @@ namespace amcp {
 				channel_context channel,
 				int channel_index,
 				int layer_id,
+				core::video_format_repository format_repository,
 				std::vector<channel_context> channels,
 				spl::shared_ptr<core::help_repository> help_repo,
 				spl::shared_ptr<core::media_info_repository> media_info_repo,
@@ -71,6 +73,7 @@ namespace amcp {
 			, channel(channel)
 			, channel_index(channel_index)
 			, layer_id(layer_id)
+			, format_repository(format_repository)
 			, channels(std::move(channels))
 			, help_repo(std::move(help_repo))
 			, media_info_repo(std::move(media_info_repo))

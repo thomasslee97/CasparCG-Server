@@ -210,6 +210,7 @@ int main(int argc, char** argv)
 	}
 
 	env::configure(L"casparcg.config");
+	core::video_format_repository format_repository;
 	spl::shared_ptr<core::system_info_provider_repository> system_info_provider_repo;
 	spl::shared_ptr<core::cg_producer_registry> cg_registry;
 	auto media_info_repo = core::create_in_memory_media_info_repository();
@@ -218,6 +219,7 @@ int main(int argc, char** argv)
 	auto consumer_registry = spl::make_shared<core::frame_consumer_registry>(help_repo);
 	std::promise<bool> shutdown_server_now;
 	protocol::amcp::amcp_command_repository repo(
+			format_repository,
 			{ },
 			nullptr,
 			media_info_repo,

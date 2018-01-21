@@ -37,6 +37,7 @@ class amcp_command_repository : boost::noncopyable
 {
 public:
 	amcp_command_repository(
+			const core::video_format_repository& format_repository,
 			const std::vector<spl::shared_ptr<core::video_channel>>& channels,
 			const std::shared_ptr<core::thumbnail_generator>& thumb_gen,
 			const spl::shared_ptr<core::media_info_repository>& media_info_repo,

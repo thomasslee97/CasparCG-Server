@@ -262,7 +262,9 @@ enum class unicode_block
 	Tags,
 	Variation_Selectors_Supplement,
 	Supplementary_Private_Use_Area_A,
-	Supplementary_Private_Use_Area_B
+	Supplementary_Private_Use_Area_B,
+
+	count
 };
 
 }}}

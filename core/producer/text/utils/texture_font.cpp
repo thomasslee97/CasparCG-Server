@@ -68,9 +68,8 @@ public:
 
 	void load_block_for_char(const int ch)
 	{
-		for (int bl = static_cast<int>(unicode_block::Basic_Latin); bl != static_cast<int>(unicode_block::Supplementary_Private_Use_Area_B); ++bl)
+		for (const unicode_block& block: enum_constants<unicode_block>())
 		{
-			const unicode_block block = static_cast<unicode_block>(bl);
 			const unicode_range range = get_range(block);
 			if (ch >= range.first && ch <= range.last) {
 				load_glyphs(block, range);

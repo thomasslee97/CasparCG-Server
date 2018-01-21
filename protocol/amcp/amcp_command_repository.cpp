@@ -64,6 +64,7 @@ AMCPCommand::ptr_type find_command(
 
 struct amcp_command_repository::impl
 {
+	core::video_format_repository								format_repository;
 	std::vector<channel_context>								channels;
 	std::shared_ptr<core::thumbnail_generator>					thumb_gen;
 	spl::shared_ptr<core::media_info_repository>				media_info_repo;
@@ -79,6 +80,7 @@ struct amcp_command_repository::impl
 	std::map<std::wstring, std::pair<amcp_command_func, int>>	channel_commands;
 
 	impl(
+			const core::video_format_repository& format_repository,
 			const std::vector<spl::shared_ptr<core::video_channel>>& channels,
 			const std::shared_ptr<core::thumbnail_generator>& thumb_gen,
 			const spl::shared_ptr<core::media_info_repository>& media_info_repo,
@@ -89,7 +91,8 @@ struct amcp_command_repository::impl
 			const spl::shared_ptr<const core::frame_consumer_registry>& consumer_registry,
 			const std::shared_ptr<accelerator::ogl::device>& ogl_device,
 			std::promise<bool>& shutdown_server_now)
-		: thumb_gen(thumb_gen)
+		: format_repository(format_repository)
+		, thumb_gen(thumb_gen)
 		, media_info_repo(media_info_repo)
 		, system_info_provider_repo(system_info_provider_repo)
 		, cg_registry(cg_registry)
@@ -110,6 +113,7 @@ struct amcp_command_repository::impl
 };
 
 amcp_command_repository::amcp_command_repository(
+		const core::video_format_repository& format_repository,
 		const std::vector<spl::shared_ptr<core::video_channel>>& channels,
 		const std::shared_ptr<core::thumbnail_generator>& thumb_gen,
 		const spl::shared_ptr<core::media_info_repository>& media_info_repo,
@@ -121,6 +125,7 @@ amcp_command_repository::amcp_command_repository(
 		const std::shared_ptr<accelerator::ogl::device>& ogl_device,
 		std::promise<bool>& shutdown_server_now)
 		: impl_(new impl(
+				format_repository,
 				channels,
 				thumb_gen,
 				media_info_repo,
@@ -143,6 +148,7 @@ AMCPCommand::ptr_type amcp_command_repository::create_command(const std::wstring
 			channel_context(),
 			-1,
 			-1,
+			self.format_repository,
 			self.channels,
 			self.help_repo,
 			self.media_info_repo,
@@ -184,6 +190,7 @@ AMCPCommand::ptr_type amcp_command_repository::create_channel_command(
 			channel,
 			channel_index,
 			layer_index,
+			self.format_repository,
 			self.channels,
 			self.help_repo,
 			self.media_info_repo,
