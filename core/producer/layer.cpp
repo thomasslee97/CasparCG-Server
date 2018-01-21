@@ -131,7 +131,7 @@ public:
 		if(preview)
 		{
 			play();
-			receive(video_format::invalid);
+			receive(video_format_repository::invalid());
 			foreground_->paused(true);
 			is_paused_ = true;
 		}

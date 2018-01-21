@@ -71,22 +71,16 @@ struct layer
 	}
 };
 
-std::size_t get_max_video_format_size()
-{
-	auto format_size = [](core::video_format format) { return core::video_format_desc(format).size; };
-	return cpplinq::from(enum_constants<core::video_format>())
-		.select(std::ref(format_size))
-		.max();
-}
-
 class image_renderer
 {
 	spl::shared_ptr<device>	ogl_;
 	image_kernel			kernel_;
+	const size_t			max_frame_size_;
 public:
-	image_renderer(const spl::shared_ptr<device>& ogl, bool blend_modes_wanted, bool straight_alpha_wanted)
+	image_renderer(const spl::shared_ptr<device>& ogl, const bool blend_modes_wanted, const bool straight_alpha_wanted, const size_t max_frame_size)
 		: ogl_(ogl)
 		, kernel_(ogl_, blend_modes_wanted, straight_alpha_wanted)
+		, max_frame_size_(max_frame_size)
 	{
 	}
 
@@ -94,7 +88,7 @@ public:
 	{
 		if(layers.empty())
 		{ // Bypass GPU with empty frame.
-			static const cache_aligned_vector<uint8_t> buffer(get_max_video_format_size(), 0);
+			static const cache_aligned_vector<uint8_t> buffer(max_frame_size_, 0);
 			return make_ready_future(array<const std::uint8_t>(buffer.data(), format_desc.size, true));
 		}
 
@@ -276,9 +270,9 @@ struct image_mixer::impl : public core::frame_factory
 	std::vector<layer>					layers_; // layer/stream/items
 	std::vector<layer*>					layer_stack_;
 public:
-	impl(const spl::shared_ptr<device>& ogl, bool blend_modes_wanted, bool straight_alpha_wanted, int channel_id)
+	impl(const spl::shared_ptr<device>& ogl, bool blend_modes_wanted, bool straight_alpha_wanted, int channel_id, const size_t max_frame_size)
 		: ogl_(ogl)
-		, renderer_(ogl, blend_modes_wanted, straight_alpha_wanted)
+		, renderer_(ogl, blend_modes_wanted, straight_alpha_wanted, max_frame_size)
 		, transform_stack_(1)
 	{
 		CASPAR_LOG(info) << L"Initialized OpenGL Accelerated GPU Image Mixer for channel " << channel_id;
@@ -362,7 +356,7 @@ public:
 	}
 };
 
-image_mixer::image_mixer(const spl::shared_ptr<device>& ogl, bool blend_modes_wanted, bool straight_alpha_wanted, int channel_id) : impl_(new impl(ogl, blend_modes_wanted, straight_alpha_wanted, channel_id)){}
+image_mixer::image_mixer(const spl::shared_ptr<device>& ogl, bool blend_modes_wanted, bool straight_alpha_wanted, int channel_id, const size_t max_frame_size) : impl_(new impl(ogl, blend_modes_wanted, straight_alpha_wanted, channel_id, max_frame_size)){}
 image_mixer::~image_mixer(){}
 void image_mixer::push(const core::frame_transform& transform){impl_->push(transform);}
 void image_mixer::visit(const core::const_frame& frame){impl_->visit(frame);}
