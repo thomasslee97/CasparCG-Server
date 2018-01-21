@@ -132,7 +132,6 @@ class video_format_repository
 {
 public:
 	explicit video_format_repository();
-	//std::vector<video_format_desc> get_all() const;
 
 	video_format_desc find(const std::wstring& name) const;
 	video_format_desc find_format(const video_format& format) const;
