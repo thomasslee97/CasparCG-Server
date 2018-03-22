@@ -459,8 +459,6 @@ public:
 
 		if (config.embedded_audio)
 		{
-			// Preroll one extra frame worth of audio
-			schedule_next_audio(core::mutable_audio_buffer(format_desc_.audio_cadence[buffer_size_ % format_desc_.audio_cadence.size()] * out_channel_layout_.num_channels, 0));
 			output_->EndAudioPreroll();
 		}
 
