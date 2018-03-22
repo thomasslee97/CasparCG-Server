@@ -337,6 +337,8 @@ if(OS_WINDOWS)
       1900  # VS2015
       1910  # VS2017 <= 15.2
       1911  # VS2017 >= 15.3
+      1912  # VS2017 >= 15.5
+      1913  # VS2017 >= 15.7?
       )
     list(FIND supported_msvc_versions ${MSVC_VERSION} _index)
     if (${_index} EQUAL -1)
