@@ -31,7 +31,6 @@ namespace caspar { namespace protocol { namespace amcp {
 
 namespace {
 
-// TODO - what is the purpose of these?
 std::mutex& get_global_mutex()
 {
     static std::mutex mutex;

@@ -96,10 +96,16 @@ class AMCPProtocolStrategy
                                                             L" for " + name);
             scheduler_->add_channel(ch.channel->timecode());
             schedule_ops_.push_back(ch.channel->add_tick_listener([&, i, queue] {
-                const int count = scheduler_->schedule(i, queue);
-                if (count < 0) {
-                    // TODO - report to diag graph
+                const auto cmds = scheduler_->schedule(i);
+                if (!cmds) {
+                    // TODO - report failed to lock to diag
+                    return;
                 }
+
+                for (auto cmd : cmds.get()) {
+                    queue->AddCommand(cmd);
+                }
+
             }));
             commandQueues_.push_back(queue);
             i++;

@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include "amcp_command_repository.h"
+#include "AMCPCommandsImpl.h"
 
 namespace caspar { namespace protocol { namespace amcp {
 
-void register_scheduler_commands(amcp_command_repository& repo);
+void register_scheduler_commands(amcp_command_repository_wrapper& repo);
 
 }}} // namespace caspar::protocol::amcp

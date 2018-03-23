@@ -23,11 +23,8 @@
 
 #include "amcp_command_repository.h"
 
-#include <common/env.h>
-
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/property_tree/ptree.hpp>
 
 #include <map>
 
@@ -36,7 +33,7 @@ namespace caspar { namespace protocol { namespace amcp {
 AMCPCommand::ptr_type find_command(const std::map<std::wstring, std::pair<amcp_command_func, int>>& commands,
                                    const std::wstring&                                              name,
                                    const std::wstring&                                              id,
-                                   const command_context&                                           ctx,
+                                   const command_context_simple&                                    ctx,
                                    std::list<std::wstring>&                                         tokens)
 {
     std::wstring subcommand;
@@ -70,20 +67,6 @@ AMCPCommand::ptr_type find_command(const std::map<std::wstring, std::pair<amcp_c
     }
 
     return nullptr;
-}
-
-std::vector<channel_context> build_channel_contexts(const std::vector<spl::shared_ptr<core::video_channel>>& channels)
-{
-    std::vector<channel_context> res;
-
-    int index = 0;
-    for (const auto& channel : channels) {
-        const std::wstring lifecycle_key = L"lock" + boost::lexical_cast<std::wstring>(index);
-        res.push_back(channel_context(channel, lifecycle_key));
-        ++index;
-    }
-
-    return res;
 }
 
 template <typename Out, typename In>
@@ -121,37 +104,17 @@ parse_channel_id(std::list<std::wstring>& tokens, std::wstring& channel_spec, in
 }
 
 struct amcp_command_repository::impl
-    : amcp_command_parser
-    , std::enable_shared_from_this<amcp_command_parser>
 {
-    const amcp_command_registry_context context_;
+    const std::vector<channel_context> channels_;
+    const spl::shared_ptr<core::help_repository>               help_repo_;
 
     std::map<std::wstring, std::pair<amcp_command_func, int>> commands{};
     std::map<std::wstring, std::pair<amcp_command_func, int>> channel_commands{};
 
-    impl(const std::vector<spl::shared_ptr<core::video_channel>>&      channels,
-         const std::shared_ptr<core::thumbnail_generator>&             thumb_gen,
-         spl::shared_ptr<core::media_info_repository>&           media_info_repo,
-         const spl::shared_ptr<core::system_info_provider_repository>& system_info_provider_repo,
-         const spl::shared_ptr<core::cg_producer_registry>&            cg_registry,
-         const spl::shared_ptr<core::help_repository>&                 help_repo,
-         const spl::shared_ptr<const core::frame_producer_registry>&   producer_registry,
-         const spl::shared_ptr<const core::frame_consumer_registry>&   consumer_registry,
-         const spl::shared_ptr<AMCPCommandScheduler>&                  scheduler,
-         const std::shared_ptr<accelerator::ogl::device>&              ogl_device,
-         std::promise<bool>&                                           shutdown_server_now)
-        : context_(build_channel_contexts(channels),
-                   thumb_gen,
-                   media_info_repo,
-                   system_info_provider_repo,
-                   cg_registry,
-                   help_repo,
-                   producer_registry,
-                   consumer_registry,
-                   scheduler,
-                   std::shared_ptr<amcp_command_parser>(this),
-                   ogl_device,
-                   shutdown_server_now)
+    impl(const std::vector<channel_context>& channels,
+    const spl::shared_ptr<core::help_repository>&                 help_repo)
+        : channels_(channels)
+        , help_repo_(help_repo)
     {
     }
 
@@ -160,7 +123,7 @@ struct amcp_command_repository::impl
                                          IO::ClientInfoPtr        client,
                                          std::list<std::wstring>& tokens) const
     {
-        const command_context ctx(context_, std::move(client), channel_context(), -1, -1);
+        const command_context_simple ctx(std::move(client), -1, -1);
 
         auto command = find_command(commands, name, id, ctx, tokens);
 
@@ -177,9 +140,10 @@ struct amcp_command_repository::impl
                                                  int                      layer_index,
                                                  std::list<std::wstring>& tokens) const
     {
-        const auto channel = context_.channels.at(channel_index);
+        if (channels_.size() <= channel_index)
+            return nullptr;
 
-        const command_context ctx(context_, std::move(client), channel, channel_index, layer_index);
+        const command_context_simple ctx(std::move(client), channel_index, layer_index);
 
         auto command = find_command(channel_commands, name, id, ctx, tokens);
 
@@ -191,7 +155,7 @@ struct amcp_command_repository::impl
 
     std::shared_ptr<AMCPCommandBase> parse_command(IO::ClientInfoPtr       client,
                                                    std::list<std::wstring> tokens,
-                                                   const std::wstring&     request_id) const override
+                                                   const std::wstring&     request_id) const
     {
         // Consume command name
         const std::basic_string<wchar_t> command_name = boost::to_upper_copy(tokens.front());
@@ -223,43 +187,24 @@ struct amcp_command_repository::impl
         return std::move(command);
     }
 
-    bool check_channel_lock(IO::ClientInfoPtr client, int channel_index) const override
+    bool check_channel_lock(IO::ClientInfoPtr client, int channel_index) const
     {
         if (channel_index < 0)
             return true;
 
-        auto lock = context_.channels.at(channel_index).lock;
+        auto lock = channels_.at(channel_index).lock;
         return !(lock && !lock->check_access(client));
     }
 };
 
 amcp_command_repository::amcp_command_repository(
-    const std::vector<spl::shared_ptr<core::video_channel>>&      channels,
-    const std::shared_ptr<core::thumbnail_generator>&             thumb_gen,
-    spl::shared_ptr<core::media_info_repository>&           media_info_repo,
-    const spl::shared_ptr<core::system_info_provider_repository>& system_info_provider_repo,
-    const spl::shared_ptr<core::cg_producer_registry>&            cg_registry,
-    const spl::shared_ptr<core::help_repository>&                 help_repo,
-    const spl::shared_ptr<const core::frame_producer_registry>&   producer_registry,
-    const spl::shared_ptr<const core::frame_consumer_registry>&   consumer_registry,
-    const spl::shared_ptr<AMCPCommandScheduler>&                  scheduler,
-    const std::shared_ptr<accelerator::ogl::device>&              ogl_device,
-    std::promise<bool>&                                           shutdown_server_now)
-    : impl_(new impl(channels,
-                     thumb_gen,
-                     media_info_repo,
-                     system_info_provider_repo,
-                     cg_registry,
-                     help_repo,
-                     producer_registry,
-                     consumer_registry,
-                     scheduler,
-                     ogl_device,
-                     shutdown_server_now))
+    const std::vector<channel_context>&      channels,
+    const spl::shared_ptr<core::help_repository>&                 help_repo)
+    : impl_(new impl(channels, help_repo))
 {
 }
 
-const std::vector<channel_context>& amcp_command_repository::channels() const { return impl_->context_.channels; }
+const std::vector<channel_context>& amcp_command_repository::channels() const { return impl_->channels_; }
 
 std::shared_ptr<AMCPCommandBase> amcp_command_repository::parse_command(IO::ClientInfoPtr       client,
                                                                         std::list<std::wstring> tokens,
@@ -280,7 +225,7 @@ void amcp_command_repository::register_command(std::wstring              categor
                                                int                       min_num_params)
 {
     if (describer)
-        impl_->context_.help_repo->register_item({ L"AMCP", category }, name, describer);
+        impl_->help_repo_->register_item({L"AMCP", category}, name, describer);
 
     impl_->commands.insert(std::make_pair(std::move(name), std::make_pair(std::move(command), min_num_params)));
 }
@@ -292,11 +237,11 @@ void amcp_command_repository::register_channel_command(std::wstring             
                                                        int                       min_num_params)
 {
     if (describer)
-        impl_->context_.help_repo->register_item({L"AMCP", category}, name, describer);
+        impl_->help_repo_->register_item({L"AMCP", category}, name, describer);
 
     impl_->channel_commands.insert(std::make_pair(std::move(name), std::make_pair(std::move(command), min_num_params)));
 }
 
-spl::shared_ptr<core::help_repository> amcp_command_repository::help_repo() const { return impl_->context_.help_repo; }
+spl::shared_ptr<core::help_repository> amcp_command_repository::help_repo() const { return impl_->help_repo_; }
 
 }}} // namespace caspar::protocol::amcp

@@ -26,6 +26,7 @@
 #endif
 
 #include "AMCPCommandsImpl.h"
+#include "amcp_commands_scheduler.h"
 
 #include "AMCPCommandQueue.h"
 #include "amcp_command_repository.h"
@@ -83,8 +84,6 @@
 #include <boost/regex.hpp>
 
 #include <tbb/concurrent_unordered_map.h>
-
-#include "amcp_commands_scheduler.h"
 
 /* Return codes
 
@@ -3102,8 +3101,41 @@ void ping_describer(core::help_sink& sink, const core::help_repository& repo)
                  L"<< PONG abcdef123");
 }
 
-void register_commands(amcp_command_repository& repo)
+void amcp_command_repository_wrapper::register_command(std::wstring              category,
+                        std::wstring              name,
+                        core::help_item_describer describer,
+                        amcp_command_impl_func         command,
+                        int                       min_num_params)
 {
+    auto func = [=](command_context_simple& ctx) {
+        auto ctx2 = ctx_->create(ctx);
+        return command(ctx2);
+    };
+
+    repo_.register_command(category, name, describer, func, min_num_params);
+}
+
+void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
+                                std::wstring              name,
+                                core::help_item_describer describer,
+                                amcp_command_impl_func         command,
+                                int                       min_num_params)
+{
+    auto func = [=](command_context_simple& ctx) {
+        auto ctx2 = ctx_->create(ctx);
+        return command(ctx2);
+    };
+
+    repo_.register_channel_command(category, name, describer, func, min_num_params);
+}
+
+spl::shared_ptr<core::help_repository> amcp_command_repository_wrapper::help_repo() const { return repo_.help_repo(); }
+
+
+void register_commands(amcp_command_repository& repo2, std::shared_ptr<command_context_factory>& ctx)
+{
+    amcp_command_repository_wrapper repo(repo2, ctx);
+
     repo.register_channel_command(L"Basic Commands", L"LOADBG", loadbg_describer, loadbg_command, 1);
     repo.register_channel_command(L"Basic Commands", L"LOAD", load_describer, load_command, 1);
     repo.register_channel_command(L"Basic Commands", L"PLAY", play_describer, play_command, 0);
@@ -3197,8 +3229,8 @@ void register_commands(amcp_command_repository& repo)
     repo.register_command(L"Query Commands", L"INFO THREADS", info_threads_describer, info_threads_command, 0);
     repo.register_channel_command(L"Query Commands", L"INFO DELAY", info_delay_describer, info_delay_command, 0);
     repo.register_command(L"Query Commands", L"DIAG", diag_describer, diag_command, 0);
-    //repo.register_command(L"Query Commands", L"GL INFO", gl_info_describer, gl_info_command, 0);
-    //repo.register_command(L"Query Commands", L"GL GC", gl_gc_describer, gl_gc_command, 0);
+    // repo.register_command(L"Query Commands", L"GL INFO", gl_info_describer, gl_info_command, 0);
+    // repo.register_command(L"Query Commands", L"GL GC", gl_gc_describer, gl_gc_command, 0);
     repo.register_command(L"Query Commands", L"BYE", bye_describer, bye_command, 0);
     repo.register_command(L"Query Commands", L"KILL", kill_describer, kill_command, 0);
     repo.register_command(L"Query Commands", L"RESTART", restart_describer, restart_command, 0);

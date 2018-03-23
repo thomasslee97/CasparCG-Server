@@ -22,7 +22,6 @@
 #pragma once
 
 #include "AMCPCommandBase.h"
-#include "AMCPCommandQueue.h"
 
 #include <core/frame/frame_timecode.h>
 
@@ -46,7 +45,7 @@ class AMCPCommandScheduler
 
     std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode);
 
-    int schedule(int channel_index, std::shared_ptr<AMCPCommandQueue> dest);
+    boost::optional<std::vector<std::shared_ptr<AMCPCommandBase>>> schedule(int channel_index);
 
   private:
     struct Impl;

@@ -41,6 +41,7 @@ set(HEADERS
 		amcp/AMCPProtocolStrategy.h
 		amcp/amcp_command_repository.h
 		amcp/amcp_shared.h
+		amcp/amcp_command_context.h
 
 		cii/CIICommand.h
 		cii/CIICommandsImpl.h

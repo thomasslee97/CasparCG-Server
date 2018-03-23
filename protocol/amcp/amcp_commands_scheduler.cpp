@@ -22,6 +22,7 @@
 #pragma once
 
 #include "amcp_commands_scheduler.h"
+#include "amcp_command_context.h"
 
 namespace caspar { namespace protocol { namespace amcp {
 
@@ -107,7 +108,7 @@ std::wstring schedule_set_command(command_context& ctx)
     return L"202 SCHEDULE SET OK\r\n";
 }
 
-void register_scheduler_commands(amcp_command_repository& repo)
+void register_scheduler_commands(amcp_command_repository_wrapper& repo)
 {
     repo.register_command(L"Scheduler Commands", L"SCHEDULE REMOVE", nullptr, schedule_remove_command, 1);
     repo.register_command(L"Scheduler Commands", L"SCHEDULE CLEAR",  nullptr, schedule_clear_command, 0);

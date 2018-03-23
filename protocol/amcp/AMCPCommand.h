@@ -23,107 +23,15 @@
 
 #include "../util/ClientInfo.h"
 #include "AMCPCommandBase.h"
-#include "AMCPCommandScheduler.h"
 #include "amcp_shared.h"
 #include <core/consumer/frame_consumer.h>
 #include <core/producer/frame_producer.h>
-#include <core/producer/stage.h>
 
-#include <core/video_channel.h>
-#include <core/thumbnail_generator.h>
-#include <core/producer/media_info/media_info_repository.h>
 #include <core/producer/cg_proxy.h>
-#include <core/system_info_provider.h>
 
 namespace caspar { namespace protocol { namespace amcp {
-
-class amcp_command_parser
-{
-  public:
-    virtual ~amcp_command_parser() = default;
-
-    virtual std::shared_ptr<AMCPCommandBase>
-    parse_command(IO::ClientInfoPtr client, std::list<std::wstring> tokens, const std::wstring& request_id) const = 0;
-
-    virtual bool check_channel_lock(IO::ClientInfoPtr client, int channel_index) const = 0;
-};
-
-struct amcp_command_registry_context
-{
-    const std::vector<channel_context>                            channels;
-    const std::shared_ptr<core::thumbnail_generator>             thumb_gen;
-    const spl::shared_ptr<core::media_info_repository>           media_info_repo;
-    const spl::shared_ptr<core::system_info_provider_repository> system_info_provider_repo;
-    const spl::shared_ptr<core::cg_producer_registry>             cg_registry;
-    const spl::shared_ptr<core::help_repository>                 help_repo;
-    const spl::shared_ptr<const core::frame_producer_registry>    producer_registry;
-    const spl::shared_ptr<const core::frame_consumer_registry>    consumer_registry;
-    const spl::shared_ptr<AMCPCommandScheduler>                   scheduler;
-    const std::shared_ptr<amcp_command_parser>                    parser;
-    const std::shared_ptr<accelerator::ogl::device>              ogl_device;
-    std::promise<bool>&                                      shutdown_server_now;
-
-    amcp_command_registry_context(
-        const std::vector<channel_context>                            channels,
-        const std::shared_ptr<core::thumbnail_generator>&             thumb_gen,
-        const spl::shared_ptr<core::media_info_repository>&           media_info_repo,
-        const spl::shared_ptr<core::system_info_provider_repository>& system_info_provider_repo,
-        const spl::shared_ptr<core::cg_producer_registry>             cg_registry,
-        const spl::shared_ptr<core::help_repository>&                 help_repo,
-        const spl::shared_ptr<const core::frame_producer_registry>    producer_registry,
-        const spl::shared_ptr<const core::frame_consumer_registry>    consumer_registry,
-        const spl::shared_ptr<AMCPCommandScheduler>                   scheduler,
-        const std::shared_ptr<amcp_command_parser>                    parser,
-        const std::shared_ptr<accelerator::ogl::device>&              ogl_device,
-        std::promise<bool>&                                     shutdown_server_now)
-        : channels(std::move(channels))
-        , thumb_gen(std::move(thumb_gen))
-        , media_info_repo(std::move(media_info_repo))
-        , system_info_provider_repo(std::move(system_info_provider_repo))
-        , cg_registry(std::move(cg_registry))
-        , help_repo(std::move(help_repo))
-        , producer_registry(std::move(producer_registry))
-        , consumer_registry(std::move(consumer_registry))
-        , scheduler(std::move(scheduler))
-        , parser(std::move(parser))
-        , ogl_device(std::move(ogl_device))
-        , shutdown_server_now(shutdown_server_now)
-    {
-    }
-};
-
-struct command_context
-{
-    const amcp_command_registry_context static_context;
-    const IO::ClientInfoPtr             client;
-    const channel_context               channel;
-    const int                           channel_index;
-    const int                           layer_id;
-    std::vector<std::wstring>           parameters;
-
-    int layer_index(int default_ = 0) const { return layer_id == -1 ? default_ : layer_id; }
-
-    command_context(const amcp_command_registry_context& static_context,
-                    IO::ClientInfoPtr                   client,
-                    channel_context                     channel,
-                    int                                 channel_index,
-                    int                                 layer_id)
-        : static_context(std::move(static_context))
-        , client(std::move(client))
-        , channel(channel)
-        , channel_index(channel_index)
-        , layer_id(layer_id)
-    {
-    }
-
-    std::vector<channel_context> channels() const { return static_context.channels; }
-};
-
-typedef std::function<std::wstring(command_context& args)> amcp_command_func;
-
-void inline send_reply_inner(const std::shared_ptr<IO::client_connection<wchar_t>> client,
-                             const std::wstring&                                   req_id,
-                             const std::wstring&                                   str)
+    
+void inline send_reply_inner(const IO::ClientInfoPtr client, const std::wstring& req_id, const std::wstring& str)
 {
     if (str.empty())
         return;
@@ -140,13 +48,13 @@ void inline send_reply_inner(const std::shared_ptr<IO::client_connection<wchar_t
 class AMCPCommand : public AMCPCommandBase // TODO AMCPSubCommand
 {
   private:
-    command_context         ctx_;
+    command_context_simple  ctx_;
     const amcp_command_func command_;
     const std::wstring      name_;
     const std::wstring      request_id_;
 
   public:
-    AMCPCommand(const command_context&           ctx,
+    AMCPCommand(const command_context_simple&    ctx,
                 const amcp_command_func&         command,
                 const std::wstring&              name,
                 const std::wstring&              request_id,
@@ -167,7 +75,7 @@ class AMCPCommand : public AMCPCommandBase // TODO AMCPSubCommand
         std::wstring res;
         { // TODO - move lock to batched command only
             if (ctx_.channel_index >= 0) {
-                std::unique_lock<std::mutex> lock = ctx_.channel.channel->stage().get_lock();
+                //std::unique_lock<std::mutex> lock = ctx.channel.channel->stage().get_lock(); // TODO - reenable
                 res                               = command_(ctx_);
             } else {
                 res = command_(ctx_);

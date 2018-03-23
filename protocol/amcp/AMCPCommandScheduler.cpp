@@ -90,42 +90,6 @@ class AMCPScheduledCommand
     core::frame_timecode timecode() const { return timecode_; }
 };
 
-/*
-struct scheduler_queue_node // TODO - fold command into this type
-{
-    std::shared_ptr<AMCPScheduledCommand> command;
-    scheduler_queue_node*                 next;
-};
-
-class scheduler_queue_list
-{
-  private:
-    scheduler_queue_node* head;
-    scheduler_queue_node* tail;
-    core::frame_timecode  current_timecode;
-
-  public:
-    scheduler_queue_list()
-        : head(nullptr)
-        , tail(nullptr)
-        , current_timecode(core::frame_timecode::get_default())
-    {
-    }
-
-    void insert(std::shared_ptr<AMCPScheduledCommand> cmd)
-    {
-        scheduler_queue_node* prev = nullptr;
-        scheduler_queue_node* node = head;
-        while (node != nullptr) {
-            
-
-
-
-
-        }
-    }
-};*/
-
 class AMCPCommandSchedulerQueue
 {
   public:
@@ -186,23 +150,22 @@ class AMCPCommandSchedulerQueue
         return res;
     }
 
-    int schedule(std::shared_ptr<AMCPCommandQueue> dest)
+    std::vector<std::shared_ptr<AMCPCommandBase>> schedule()
     {
-        int                        count = 0;
-        const core::frame_timecode now   = channel_timecode_->timecode();
+        std::vector<std::shared_ptr<AMCPCommandBase>> res;
+        const core::frame_timecode                    now = channel_timecode_->timecode();
 
         // TODO - optimise once queue type has changed
         for (int i = 0; i < scheduled_commands_.size(); i++) {
             const auto cmd = scheduled_commands_[i];
             if (cmd->timecode() < now) {
-                dest->AddCommand(std::move(cmd->create_command()));
+                res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
                 --i;
-                count++;
             }
         }
 
-        return count;
+        return res;
     }
 
     std::shared_ptr<core::channel_timecode> channel_timecode() const { return channel_timecode_; }
@@ -296,15 +259,15 @@ struct AMCPCommandScheduler::Impl
         bool is_locked() const { return locked_; }
     };
 
-    int schedule(int channel_index, std::shared_ptr<AMCPCommandQueue> dest)
+    boost::optional<std::vector<std::shared_ptr<AMCPCommandBase>>> schedule(int channel_index)
     {
         // TODO - tweak this timeout
         timeout_lock lock(lock_, 5);
 
         if (!lock.is_locked())
-            return -1;
+            return boost::none;
 
-        return queues_.at(channel_index)->schedule(dest);
+        return queues_.at(channel_index)->schedule();
     }
 };
 
@@ -335,9 +298,9 @@ std::vector<std::pair<core::frame_timecode, std::wstring>> AMCPCommandScheduler:
     return impl_->list(timecode);
 }
 
-int AMCPCommandScheduler::schedule(int channel_index, std::shared_ptr<AMCPCommandQueue> dest)
+boost::optional<std::vector<std::shared_ptr<AMCPCommandBase>>> AMCPCommandScheduler::schedule(int channel_index)
 {
-    return impl_->schedule(channel_index, dest);
+    return impl_->schedule(channel_index);
 }
 
 }}} // namespace caspar::protocol::amcp

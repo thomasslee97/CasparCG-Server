@@ -235,21 +235,29 @@ bool run(const std::wstring& config_file_name, tbb::atomic<bool>& should_wait_fo
     // Create a dummy client which prints amcp responses to console.
     auto console_client = spl::make_shared<IO::ConsoleClientInfo>();
 
-    // Create a amcp parser for console commands.
-    auto amcp = protocol::amcp::create_wchar_amcp_strategy_factory(
-        L"Console", caspar_server->get_amcp_command_repository(), caspar_server->get_amcp_command_scheduler())
-            ->create(console_client);
-    std::weak_ptr<IO::protocol_strategy<wchar_t>> weak_amcp = amcp;
+    std::weak_ptr<IO::protocol_strategy<wchar_t>> weak_amcp;
+    bool                                          should_restart;
 
-    // Use separate thread for the blocking console input, will be terminated
-    // anyway when the main thread terminates.
-    boost::thread stdin_thread(std::bind(do_run,
-                                         weak_amcp,
-                                         std::ref(shutdown_server_now),
-                                         std::ref(should_wait_for_keypress))); // compiler didn't like lambda here...
-    stdin_thread.detach();
-    bool should_restart = shutdown_server.get();
-    //amcp.reset();
+    {
+        // Create a amcp parser for console commands.
+        auto amcp = protocol::amcp::create_wchar_amcp_strategy_factory(L"Console",
+                                                                       caspar_server->get_amcp_command_repository(),
+                                                                       caspar_server->get_amcp_command_scheduler())
+                        ->create(console_client);
+        weak_amcp = amcp;
+
+        // Use separate thread for the blocking console input, will be terminated
+        // anyway when the main thread terminates.
+        boost::thread stdin_thread(
+            std::bind(do_run,
+                      weak_amcp,
+                      std::ref(shutdown_server_now),
+                      std::ref(should_wait_for_keypress))); // compiler didn't like lambda here...
+        stdin_thread.detach();
+        should_restart = shutdown_server.get();
+    }
+
+    caspar_server.reset();
 
     while (weak_amcp.lock())
         ;
