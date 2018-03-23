@@ -63,6 +63,7 @@
 
 #include <protocol/amcp/AMCPProtocolStrategy.h>
 #include <protocol/amcp/amcp_command_repository.h>
+#include <protocol/amcp/AMCPCommandScheduler.h>
 #include <protocol/amcp/AMCPCommandsImpl.h>
 #include <protocol/cii/CIIProtocolStrategy.h>
 #include <protocol/clk/CLKProtocolStrategy.h>
@@ -135,6 +136,7 @@ struct server::impl : boost::noncopyable
 	accelerator::accelerator							accelerator_;
 	spl::shared_ptr<help_repository>					help_repo_;
 	std::shared_ptr<amcp::amcp_command_repository>		amcp_command_repo_;
+        std::shared_ptr<amcp::AMCPCommandScheduler>        amcp_command_scheduler_;
 	std::vector<spl::shared_ptr<IO::AsyncEventServer>>	async_servers_;
 	std::shared_ptr<IO::AsyncEventServer>				primary_amcp_server_;
 	std::shared_ptr<osc::client>						osc_client_						= std::make_shared<osc::client>(io_service_);
@@ -211,10 +213,11 @@ struct server::impl : boost::noncopyable
 		std::weak_ptr<boost::asio::io_service> weak_io_service = io_service_;
 		io_service_.reset();
 		osc_client_.reset();
-		thumbnail_generator_.reset();
-		amcp_command_repo_.reset();
-		primary_amcp_server_.reset();
-		async_servers_.clear();
+                thumbnail_generator_.reset();
+                amcp_command_repo_.reset();
+                amcp_command_scheduler_.reset();
+                primary_amcp_server_.reset();
+                async_servers_.clear();
 		destroy_producers_synchronously();
 		destroy_consumers_synchronously();
 		channels_.clear();
@@ -398,52 +401,56 @@ struct server::impl : boost::noncopyable
 			pt.get(L"configuration.thumbnails.mipmap", true)));
 	}
 
-	void setup_controllers(const boost::property_tree::wptree& pt)
-	{
-		amcp_command_repo_ = spl::make_shared<amcp::amcp_command_repository>(
-				channels_,
-				thumbnail_generator_,
-				media_info_repo_,
-				system_info_provider_repo_,
-				cg_registry_,
-				help_repo_,
-				producer_registry_,
-				consumer_registry_,
-				accelerator_.get_ogl_device(),
-				shutdown_server_now_);
-		amcp::register_commands(*amcp_command_repo_);
+        void setup_controllers(const boost::property_tree::wptree& pt)
+        {
+            amcp_command_scheduler_ = std::make_shared<amcp::AMCPCommandScheduler>();
+            amcp_command_repo_ =
+                spl::make_shared<amcp::amcp_command_repository>(channels_,
+                                                                thumbnail_generator_,
+                                                                media_info_repo_,
+                                                                system_info_provider_repo_,
+                                                                cg_registry_,
+                                                                help_repo_,
+                                                                producer_registry_,
+                                                                consumer_registry_,
+                                                                spl::make_shared_ptr(amcp_command_scheduler_),
+                                                                accelerator_.get_ogl_device(),
+                                                                shutdown_server_now_);
+            amcp::register_commands(*amcp_command_repo_);
 
-		using boost::property_tree::wptree;
-		for (auto& xml_controller : pt | witerate_children(L"configuration.controllers") | welement_context_iteration)
-		{
-			auto name = xml_controller.first;
-			auto protocol = ptree_get<std::wstring>(xml_controller.second, L"protocol");
+            using boost::property_tree::wptree;
+            for (auto& xml_controller :
+                 pt | witerate_children(L"configuration.controllers") | welement_context_iteration) {
+                auto name     = xml_controller.first;
+                auto protocol = ptree_get<std::wstring>(xml_controller.second, L"protocol");
 
-			if(name == L"tcp")
-			{
-				auto port = ptree_get<unsigned int>(xml_controller.second, L"port");
-				auto asyncbootstrapper = spl::make_shared<IO::AsyncEventServer>(
-						io_service_,
-						create_protocol(protocol, L"TCP Port " + boost::lexical_cast<std::wstring>(port)),
-						port);
-				async_servers_.push_back(asyncbootstrapper);
+                if (name == L"tcp") {
+                    auto port              = ptree_get<unsigned int>(xml_controller.second, L"port");
+                    auto asyncbootstrapper = spl::make_shared<IO::AsyncEventServer>(
+                        io_service_,
+                        create_protocol(protocol, L"TCP Port " + boost::lexical_cast<std::wstring>(port)),
+                        port);
+                    async_servers_.push_back(asyncbootstrapper);
 
-				if (!primary_amcp_server_ && boost::iequals(protocol, L"AMCP"))
-					primary_amcp_server_ = asyncbootstrapper;
-			}
-			else
-				CASPAR_LOG(warning) << "Invalid controller: " << name;
-		}
+                    if (!primary_amcp_server_ && boost::iequals(protocol, L"AMCP"))
+                        primary_amcp_server_ = asyncbootstrapper;
+                } else
+                    CASPAR_LOG(warning) << "Invalid controller: " << name;
+            }
 	}
 
 	IO::protocol_strategy_factory<char>::ptr create_protocol(const std::wstring& name, const std::wstring& port_description) const
 	{
 		using namespace IO;
 
-		if(boost::iequals(name, L"AMCP"))
-			return wrap_legacy_protocol("\r\n", spl::make_shared<amcp::AMCPProtocolStrategy>(port_description, spl::make_shared_ptr(amcp_command_repo_)));
-		else if(boost::iequals(name, L"CII"))
-			return wrap_legacy_protocol("\r\n", spl::make_shared<cii::CIIProtocolStrategy>(channels_, cg_registry_, producer_registry_));
+                if (boost::iequals(name, L"AMCP"))
+                    return amcp::create_char_amcp_strategy_factory(port_description,
+                                                                   spl::make_shared_ptr(amcp_command_repo_),
+                                                                   spl::make_shared_ptr(amcp_command_scheduler_));
+                else if (boost::iequals(name, L"CII"))
+                    return wrap_legacy_protocol(
+                        "\r\n",
+                        spl::make_shared<cii::CIIProtocolStrategy>(channels_, cg_registry_, producer_registry_));
 		else if(boost::iequals(name, L"CLOCK"))
 			return spl::make_shared<to_unicode_adapter_factory>(
 					"ISO-8859-1",
@@ -491,8 +498,15 @@ struct server::impl : boost::noncopyable
 
 server::server(std::promise<bool>& shutdown_server_now) : impl_(new impl(shutdown_server_now)){}
 void server::start() { impl_->start(); }
-spl::shared_ptr<core::system_info_provider_repository> server::get_system_info_provider_repo() const { return impl_->system_info_provider_repo_; }
-spl::shared_ptr<protocol::amcp::amcp_command_repository> server::get_amcp_command_repository() const { return spl::make_shared_ptr(impl_->amcp_command_repo_); }
+spl::shared_ptr<core::system_info_provider_repository> server::get_system_info_provider_repo() const { return impl_->system_info_provider_repo_;
+}
+spl::shared_ptr<protocol::amcp::amcp_command_repository> server::get_amcp_command_repository() const
+{
+    return spl::make_shared_ptr(impl_->amcp_command_repo_);
+}
+spl::shared_ptr<amcp::AMCPCommandScheduler> server::get_amcp_command_scheduler() const
+{
+    return spl::make_shared_ptr(impl_->amcp_command_scheduler_);
+}
 core::monitor::subject& server::monitor_output() { return *impl_->monitor_subject_; }
-
 }

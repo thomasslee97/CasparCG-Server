@@ -3,7 +3,9 @@ project (protocol)
 
 set(SOURCES
 		amcp/AMCPCommandQueue.cpp
+		amcp/AMCPCommandScheduler.cpp
 		amcp/AMCPCommandsImpl.cpp
+		amcp/amcp_commands_scheduler.cpp
 		amcp/AMCPProtocolStrategy.cpp
 		amcp/amcp_command_repository.cpp
 
@@ -30,9 +32,12 @@ set(SOURCES
 		StdAfx.cpp
 )
 set(HEADERS
+		amcp/AMCPCommandBase.h
 		amcp/AMCPCommand.h
 		amcp/AMCPCommandQueue.h
+		amcp/AMCPCommandScheduler.h
 		amcp/AMCPCommandsImpl.h
+		amcp/amcp_commands_scheduler.h
 		amcp/AMCPProtocolStrategy.h
 		amcp/amcp_command_repository.h
 		amcp/amcp_shared.h

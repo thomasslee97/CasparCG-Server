@@ -1201,7 +1201,7 @@ public:
 	{
 	}
 
-	void initialize(const core::video_format_desc& format_desc, const core::audio_channel_layout& channel_layout, int) override
+	void initialize(const core::video_format_desc& format_desc, const core::audio_channel_layout& channel_layout, int, std::shared_ptr<core::channel_timecode> channel_timecode) override
 	{
 		if (consumer_)
 			CASPAR_THROW_EXCEPTION(invalid_operation() << msg_info("Cannot reinitialize ffmpeg-consumer."));

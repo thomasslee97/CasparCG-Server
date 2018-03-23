@@ -16,6 +16,7 @@ set(SOURCES
 		frame/audio_channel_layout.cpp
 		frame/draw_frame.cpp
 		frame/frame.cpp
+		frame/frame_timecode.cpp
 		frame/frame_transform.cpp
 		frame/geometry.cpp
 
@@ -75,6 +76,7 @@ set(HEADERS
 		frame/audio_channel_layout.h
 		frame/draw_frame.h
 		frame/frame.h
+		frame/frame_timecode.h
 		frame/frame_factory.h
 		frame/frame_transform.h
 		frame/frame_visitor.h

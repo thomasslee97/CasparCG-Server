@@ -16,30 +16,25 @@
  * You should have received a copy of the GNU General Public License
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Nicklas P Andersson
+ * Author:
  */
 
 #pragma once
 
-#include "../util/ClientInfo.h"
-
-#include <common/memory.h>
-
 #include <string>
-
-#include "AMCPCommandScheduler.h"
-#include "amcp_command_repository.h"
 
 namespace caspar { namespace protocol { namespace amcp {
 
-IO::protocol_strategy_factory<char>::ptr
-create_char_amcp_strategy_factory(const std::wstring&                                   name,
-                                  const spl::shared_ptr<amcp_command_repository>& repo,
-                                  const spl::shared_ptr<AMCPCommandScheduler>&          scheduler);
+class AMCPCommandBase
+{
+  public:
+    virtual ~AMCPCommandBase() = default;
 
-IO::protocol_strategy_factory<wchar_t>::ptr
-create_wchar_amcp_strategy_factory(const std::wstring&                                   name,
-                                   const spl::shared_ptr<amcp_command_repository>& repo,
-                                   const spl::shared_ptr<AMCPCommandScheduler>&          scheduler);
+    virtual bool Execute()                                = 0; // TODO - is return type needed?
+    virtual void SendReply(const std::wstring& str) const = 0; // TODO - really?
+
+    virtual std::wstring name() const          = 0;
+    virtual int          channel_index() const = 0; // TODO - can this be removed?
+};
 
 }}} // namespace caspar::protocol::amcp

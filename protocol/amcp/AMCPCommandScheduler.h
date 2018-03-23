@@ -21,25 +21,36 @@
 
 #pragma once
 
-#include "../util/ClientInfo.h"
+#include "AMCPCommandBase.h"
+#include "AMCPCommandQueue.h"
 
-#include <common/memory.h>
-
-#include <string>
-
-#include "AMCPCommandScheduler.h"
-#include "amcp_command_repository.h"
+#include <core/frame/frame_timecode.h>
 
 namespace caspar { namespace protocol { namespace amcp {
 
-IO::protocol_strategy_factory<char>::ptr
-create_char_amcp_strategy_factory(const std::wstring&                                   name,
-                                  const spl::shared_ptr<amcp_command_repository>& repo,
-                                  const spl::shared_ptr<AMCPCommandScheduler>&          scheduler);
+class AMCPCommandScheduler
+{
+  public:
+    AMCPCommandScheduler();
 
-IO::protocol_strategy_factory<wchar_t>::ptr
-create_wchar_amcp_strategy_factory(const std::wstring&                                   name,
-                                   const spl::shared_ptr<amcp_command_repository>& repo,
-                                   const spl::shared_ptr<AMCPCommandScheduler>&          scheduler);
+    void add_channel(std::shared_ptr<core::channel_timecode> channel_timecode);
+
+    void set(int                              channel_index,
+             const std::wstring&              token,
+             const core::frame_timecode&      timecode,
+             std::shared_ptr<AMCPCommandBase> command);
+
+    bool remove(const std::wstring& token);
+
+    void clear();
+
+    std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode);
+
+    int schedule(int channel_index, std::shared_ptr<AMCPCommandQueue> dest);
+
+  private:
+    struct Impl;
+    std::shared_ptr<Impl> impl_;
+};
 
 }}} // namespace caspar::protocol::amcp

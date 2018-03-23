@@ -33,6 +33,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <core/frame/frame_timecode.h>
 
 namespace caspar { namespace core {
 
@@ -54,10 +55,13 @@ public:
 
 	// Methods
 
-	virtual std::future<bool>				send(const_frame frame) = 0;
-	virtual void							initialize(const video_format_desc& format_desc, const audio_channel_layout& channel_layout, int channel_index) = 0;
+        virtual std::future<bool> send(const_frame frame)                                              = 0;
+        virtual void              initialize(const video_format_desc&                format_desc,
+                                             const audio_channel_layout&             channel_layout,
+                                             int                                     channel_index,
+                                             std::shared_ptr<core::channel_timecode> channel_timecode) = 0;
 
-	// monitor::observable
+        // monitor::observable
 
 	virtual monitor::subject& monitor_output() = 0;
 

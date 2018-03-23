@@ -34,7 +34,7 @@ public:
 
 	// Properties
 
-	void change_channel_format(const video_format_desc& format_desc, const audio_channel_layout& channel_layout);
+	void change_channel_format(const video_format_desc& format_desc, const audio_channel_layout& channel_layout, std::shared_ptr<core::channel_timecode> channel_timecode);
 	std::wstring print() const;
 	int buffer_depth() const;
 	bool has_synchronization_clock() const;

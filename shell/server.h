@@ -32,6 +32,7 @@
 #include <vector>
 
 FORWARD3(caspar, protocol, amcp, class amcp_command_repository);
+FORWARD3(caspar, protocol, amcp, class AMCPCommandScheduler);
 
 namespace caspar {
 
@@ -40,10 +41,11 @@ class server final : public boost::noncopyable
 public:
 	explicit server(std::promise<bool>& shutdown_server_now);
 	void start();
-	spl::shared_ptr<core::system_info_provider_repository> get_system_info_provider_repo() const;
-	spl::shared_ptr<protocol::amcp::amcp_command_repository> get_amcp_command_repository() const;
+        spl::shared_ptr<core::system_info_provider_repository>   get_system_info_provider_repo() const;
+        spl::shared_ptr<protocol::amcp::amcp_command_repository> get_amcp_command_repository() const;
+        spl::shared_ptr<protocol::amcp::AMCPCommandScheduler>    get_amcp_command_scheduler() const;
 
-	core::monitor::subject& monitor_output();
+        core::monitor::subject& monitor_output();
 private:
 	struct impl;
 	spl::shared_ptr<impl> impl_;

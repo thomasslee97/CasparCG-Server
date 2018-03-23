@@ -57,6 +57,7 @@ struct output::impl
 	spl::shared_ptr<diagnostics::graph>	graph_;
 	spl::shared_ptr<monitor::subject>	monitor_subject_			= spl::make_shared<monitor::subject>("/output");
 	const int							channel_index_;
+    std::shared_ptr<core::channel_timecode>          channel_timecode_;
 	video_format_desc					format_desc_;
 	audio_channel_layout				channel_layout_;
 	std::map<int, port>					ports_;
@@ -65,9 +66,10 @@ struct output::impl
 	std::map<int, int64_t>				send_to_consumers_delays_;
 	executor							executor_					{ L"output " + boost::lexical_cast<std::wstring>(channel_index_) };
 public:
-	impl(spl::shared_ptr<diagnostics::graph> graph, const video_format_desc& format_desc, const audio_channel_layout& channel_layout, int channel_index)
+	impl(spl::shared_ptr<diagnostics::graph> graph, const video_format_desc& format_desc, const audio_channel_layout& channel_layout, int channel_index, std::shared_ptr<core::channel_timecode> channel_timecode)
 		: graph_(std::move(graph))
 		, channel_index_(channel_index)
+        , channel_timecode_(channel_timecode)
 		, format_desc_(format_desc)
 		, channel_layout_(channel_layout)
 	{
@@ -78,7 +80,7 @@ public:
 	{
 		remove(index);
 
-		consumer->initialize(format_desc_, channel_layout_, channel_index_);
+		consumer->initialize(format_desc_, channel_layout_, channel_index_, channel_timecode_);
 
 		executor_.begin_invoke([this, index, consumer]
 		{
@@ -123,7 +125,7 @@ public:
 			{
 				try
 				{
-					it->second.change_channel_format(format_desc, channel_layout);
+					it->second.change_channel_format(format_desc, channel_layout, channel_timecode_);
 					++it;
 				}
 				catch(...)
@@ -312,8 +314,15 @@ public:
 	}
 };
 
-output::output(spl::shared_ptr<diagnostics::graph> graph, const video_format_desc& format_desc, const core::audio_channel_layout& channel_layout, int channel_index) : impl_(new impl(std::move(graph), format_desc, channel_layout, channel_index)){}
-void output::add(int index, const spl::shared_ptr<frame_consumer>& consumer){impl_->add(index, consumer);}
+output::output(spl::shared_ptr<diagnostics::graph>     graph,
+               const video_format_desc&                format_desc,
+               const core::audio_channel_layout&       channel_layout,
+               int                                     channel_index,
+               std::shared_ptr<core::channel_timecode> channel_timecode)
+    : impl_(new impl(std::move(graph), format_desc, channel_layout, channel_index, channel_timecode))
+{
+}
+void output::add(int index, const spl::shared_ptr<frame_consumer>& consumer) { impl_->add(index, consumer); }
 void output::add(const spl::shared_ptr<frame_consumer>& consumer){impl_->add(consumer);}
 void output::remove(int index){impl_->remove(index);}
 void output::remove(const spl::shared_ptr<frame_consumer>& consumer){impl_->remove(consumer);}

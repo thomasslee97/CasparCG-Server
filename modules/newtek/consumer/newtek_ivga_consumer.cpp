@@ -86,7 +86,7 @@ public:
 	virtual void initialize(
 			const core::video_format_desc& format_desc,
 			const core::audio_channel_layout& channel_layout,
-			int channel_index) override
+			int channel_index, std::shared_ptr<core::channel_timecode> channel_timecode) override
 	{
 		air_send_.reset(
 			airsend::create(

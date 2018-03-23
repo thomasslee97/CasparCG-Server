@@ -614,13 +614,17 @@ public:
 
 	// frame_consumer
 
-	void initialize(const core::video_format_desc& format_desc, const core::audio_channel_layout&, int channel_index) override
-	{
-		consumer_.reset();
-		consumer_.reset(new screen_consumer(config_, format_desc, channel_index, sink_));
-	}
+        void initialize(const core::video_format_desc& format_desc,
+                        const core::audio_channel_layout&,
+                        int                                     channel_index,
+                        std::shared_ptr<core::channel_timecode> channel_timecode) override
+        {
+            consumer_.reset();
+            consumer_.reset(new screen_consumer(config_, format_desc, channel_index, sink_));
+            // TODO - pass timecode through and add option to burn in?
+        }
 
-	int64_t presentation_frame_age_millis() const override
+        int64_t presentation_frame_age_millis() const override
 	{
 		return consumer_ ? static_cast<int64_t>(consumer_->current_presentation_age_) : 0;
 	}

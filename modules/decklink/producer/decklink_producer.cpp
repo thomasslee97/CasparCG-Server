@@ -37,18 +37,19 @@
 #include <common/param.h>
 #include <common/timer.h>
 
-#include <core/frame/audio_channel_layout.h>
-#include <core/frame/frame.h>
-#include <core/frame/draw_frame.h>
-#include <core/frame/frame_transform.h>
-#include <core/frame/frame_factory.h>
-#include <core/producer/frame_producer.h>
-#include <core/producer/framerate/framerate_producer.h>
-#include <core/monitor/monitor.h>
 #include <core/diagnostics/call_context.h>
-#include <core/mixer/audio/audio_mixer.h>
+#include <core/frame/audio_channel_layout.h>
+#include <core/frame/draw_frame.h>
+#include <core/frame/frame.h>
+#include <core/frame/frame_factory.h>
+#include <core/frame/frame_timecode.h>
+#include <core/frame/frame_transform.h>
 #include <core/help/help_repository.h>
 #include <core/help/help_sink.h>
+#include <core/mixer/audio/audio_mixer.h>
+#include <core/monitor/monitor.h>
+#include <core/producer/frame_producer.h>
+#include <core/producer/framerate/framerate_producer.h>
 
 #include <tbb/concurrent_queue.h>
 
@@ -239,9 +240,31 @@ public:
 			video_frame->height				= video->GetHeight();
 			video_frame->interlaced_frame	= in_format_desc_.field_mode != core::field_mode::progressive;
 			video_frame->top_field_first	= in_format_desc_.field_mode == core::field_mode::upper ? 1 : 0;
-			video_frame->key_frame			= 1;
+                        video_frame->key_frame          = 1;
 
-			monitor_subject_
+                        core::frame_timecode
+                            timecode; // TODO - does this want to be a pointer to make it optional? or is this fine?
+
+                        // TODO return code
+                        IDeckLinkTimecode*
+                            tc; // TODO - determine type based on video format and give the user some control too.
+                        if (SUCCEEDED(video->GetTimecode(BMDTimecodeFormat::bmdTimecodeRP188Any, &tc)) && tc) {
+                            // TODO - read flags from tc too
+                            if (SUCCEEDED(tc->GetComponents(
+                                    &timecode.hours, &timecode.minutes, &timecode.seconds, &timecode.frames))) {
+                                //                    CASPAR_LOG(info) << "Got timecode";
+                            }
+
+                            BSTR str;
+                            if (SUCCEEDED(tc->GetString(&str))) {
+                                std::wstring ws(str, SysStringLen(str));
+                                CASPAR_LOG(info) << "Timecode: " << ws;
+                            }
+
+                            tc->Release();
+                        }
+
+                        monitor_subject_
 					<< core::monitor::message("/file/name")					% model_name_
 					<< core::monitor::message("/file/path")					% device_index_
 					<< core::monitor::message("/file/video/width")			% video->GetWidth()
@@ -251,8 +274,10 @@ public:
 					<< core::monitor::message("/file/audio/channels")		% 2
 					<< core::monitor::message("/file/audio/format")			% u8(av_get_sample_fmt_name(AV_SAMPLE_FMT_S32))
 					<< core::monitor::message("/file/fps")					% in_format_desc_.fps;
+                    // TODO - add timecode string to osc
 
-			// Audio
+
+                        // Audio
 
 			std::shared_ptr<core::mutable_audio_buffer>	audio_buffer;
 			void*										audio_bytes		= nullptr;

@@ -61,6 +61,7 @@ struct video_channel::impl final
 
 	mutable tbb::spin_mutex								format_desc_mutex_;
 	core::video_format_desc								format_desc_;
+    std::shared_ptr<channel_timecode> timecode_;
 	mutable tbb::spin_mutex								channel_layout_mutex_;
 	core::audio_channel_layout							channel_layout_;
 
@@ -83,32 +84,31 @@ struct video_channel::impl final
 
 	executor											executor_				{ L"video_channel " + boost::lexical_cast<std::wstring>(index_) };
 public:
-	impl(
-			int index,
-			const core::video_format_desc& format_desc,
-			const core::audio_channel_layout& channel_layout,
-			std::unique_ptr<image_mixer> image_mixer)
-		: monitor_subject_(spl::make_shared<monitor::subject>(
-				"/channel/" + boost::lexical_cast<std::string>(index)))
-		, index_(index)
-		, format_desc_(format_desc)
-		, channel_layout_(channel_layout)
-		, output_(graph_, format_desc, channel_layout, index)
-		, image_mixer_(std::move(image_mixer))
-		, mixer_(index, graph_, image_mixer_)
-		, stage_(index, graph_)
-	{
-		graph_->set_color("tick-time", caspar::diagnostics::color(0.0f, 0.6f, 0.9f));
-		graph_->set_text(print());
-		caspar::diagnostics::register_graph(graph_);
+  impl(int                               index,
+       const core::video_format_desc&    format_desc,
+       const core::audio_channel_layout& channel_layout,
+       std::unique_ptr<image_mixer>      image_mixer)
+      : monitor_subject_(spl::make_shared<monitor::subject>("/channel/" + boost::lexical_cast<std::string>(index)))
+      , index_(index)
+      , format_desc_(format_desc)
+      , timecode_(std::make_shared<channel_timecode>()) // TODO - initial value?
+      , channel_layout_(channel_layout)
+      , output_(graph_, format_desc, channel_layout, index, timecode_)
+      , image_mixer_(std::move(image_mixer))
+      , mixer_(index, graph_, image_mixer_)
+      , stage_(index, graph_)
+  {
+      graph_->set_color("tick-time", caspar::diagnostics::color(0.0f, 0.6f, 0.9f));
+      graph_->set_text(print());
+      caspar::diagnostics::register_graph(graph_);
 
-		output_.monitor_output().attach_parent(monitor_subject_);
-		mixer_.monitor_output().attach_parent(monitor_subject_);
-		stage_.monitor_output().attach_parent(monitor_subject_);
+      output_.monitor_output().attach_parent(monitor_subject_);
+      mixer_.monitor_output().attach_parent(monitor_subject_);
+      stage_.monitor_output().attach_parent(monitor_subject_);
 
-		executor_.begin_invoke([=]{tick();});
+      executor_.begin_invoke([=] { tick(); });
 
-		CASPAR_LOG(info) << print() << " Successfully Initialized.";
+      CASPAR_LOG(info) << print() << " Successfully Initialized.";
 	}
 
 	~impl()
@@ -176,13 +176,25 @@ public:
 			auto format_desc	= video_format_desc();
 			auto channel_layout = audio_channel_layout();
 
-			caspar::timer frame_timer;
+                        caspar::timer frame_timer;
 
-			// Produce
+                        // We tick now, and the timecode producer will reset it if it got data
+                        timecode_->tick();
+                        // TODO - use system clock if required
+
+                        // TODO - we need to notify the amcp queue about the new timecode.
+                        // should it be timecode-1, as anything with timecode of now wont have a chance to execute
+                        // before the render begins. perhaps up here is dangerous as it makes it likely that changes
+                        // will happen mid render?
+
+                        // Produce
 
 			auto stage_frames = stage_(format_desc);
 
-			// Mix
+                        // TODO - timecode commands should be scheduled before/during consume, to give a chance for
+                        // execution
+
+                        // Mix
 
 			auto mixed_frame  = mixer_(std::move(stage_frames), format_desc, channel_layout);
 
@@ -194,12 +206,13 @@ public:
 			auto frame_time = frame_timer.elapsed()*format_desc.fps*0.5;
 			graph_->set_value("tick-time", frame_time);
 
-			*monitor_subject_	<< monitor::message("/profiler/time")	% frame_timer.elapsed() % (1.0/ video_format_desc().fps)
-								<< monitor::message("/format")			% format_desc.name;
-		}
-		catch(...)
-		{
-			CASPAR_LOG_CURRENT_EXCEPTION();
+                        *monitor_subject_ << monitor::message("/profiler/time") % frame_timer.elapsed() %
+                                                 (1.0 / video_format_desc().fps)
+                                          << monitor::message("/format") % format_desc.name
+                                          << monitor::message("/timecode") % timecode_->timecode().string();
+                        
+                } catch (...) {
+                    CASPAR_LOG_CURRENT_EXCEPTION();
 		}
 
 		if (executor_.is_running())
@@ -287,7 +300,11 @@ void core::video_channel::audio_channel_layout(const core::audio_channel_layout&
 boost::property_tree::wptree video_channel::info() const{return impl_->info();}
 boost::property_tree::wptree video_channel::delay_info() const { return impl_->delay_info(); }
 int video_channel::index() const { return impl_->index(); }
-monitor::subject& video_channel::monitor_output(){ return *impl_->monitor_subject_; }
-std::shared_ptr<void> video_channel::add_tick_listener(std::function<void()> listener) { return impl_->add_tick_listener(std::move(listener)); }
+monitor::subject&            video_channel::monitor_output() { return *impl_->monitor_subject_; }
+std::shared_ptr<void>        video_channel::add_tick_listener(std::function<void()> listener)
+{
+    return impl_->add_tick_listener(std::move(listener));
+}
+const std::shared_ptr<core::channel_timecode> video_channel::timecode() const { return impl_->timecode_; }
 
 }}

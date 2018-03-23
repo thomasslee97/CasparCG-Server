@@ -671,7 +671,7 @@ public:
 
 	// frame_consumer
 
-	void initialize(const core::video_format_desc& format_desc, const core::audio_channel_layout& channel_layout, int channel_index) override
+	void initialize(const core::video_format_desc& format_desc, const core::audio_channel_layout& channel_layout, int channel_index,                    std::shared_ptr<core::channel_timecode> channel_timecode) override
 	{
 		format_desc_		= format_desc;
 		in_channel_layout_	= channel_layout;
