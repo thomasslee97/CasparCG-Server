@@ -80,9 +80,13 @@ struct video_channel::impl final
 
 	mutable tbb::spin_mutex								tick_listeners_mutex_;
 	int64_t												last_tick_listener_id	= 0;
-	std::unordered_map<int64_t, std::function<void ()>>	tick_listeners_;
+        std::unordered_map<int64_t, std::function<void()>>                                              tick_listeners_;
 
-	executor											executor_				{ L"video_channel " + boost::lexical_cast<std::wstring>(index_) };
+        mutable tbb::spin_mutex                            timecode_listeners_mutex_;
+        int64_t                                            last_timecode_listener_id = 0;
+        std::unordered_map<int64_t, std::function<void()>> timecode_listeners_;
+
+        executor											executor_				{ L"video_channel " + boost::lexical_cast<std::wstring>(index_) };
 public:
   impl(int                               index,
        const core::video_format_desc&    format_desc,
@@ -164,10 +168,23 @@ public:
 			{
 				CASPAR_LOG_CURRENT_EXCEPTION();
 			}
-		}
-	}
+                }
+        }
 
-	void tick()
+        void invoke_timecode_listeners()
+        {
+            auto listeners = lock(timecode_listeners_mutex_, [=] { return timecode_listeners_; });
+
+            for (auto listener : listeners) {
+                try {
+                    listener.second();
+                } catch (...) {
+                    CASPAR_LOG_CURRENT_EXCEPTION();
+                }
+            }
+        }
+
+        void tick()
 	{
 		try
 		{
@@ -181,18 +198,13 @@ public:
                         // We tick now, and the timecode producer will reset it if it got data
                         timecode_->tick();
                         // TODO - use system clock if required
-
-                        // TODO - we need to notify the amcp queue about the new timecode.
-                        // should it be timecode-1, as anything with timecode of now wont have a chance to execute
-                        // before the render begins. perhaps up here is dangerous as it makes it likely that changes
-                        // will happen mid render?
-
+                        
                         // Produce
 
 			auto stage_frames = stage_(format_desc);
 
-                        // TODO - timecode commands should be scheduled before/during consume, to give a chance for
-                        // execution
+                        // Schedule commands for next timecode
+                        invoke_timecode_listeners();
 
                         // Mix
 
@@ -277,7 +289,19 @@ public:
 				});
 			});
 		});
-	}
+        }
+
+        std::shared_ptr<void> add_timecode_listener(std::function<void()> listener)
+        {
+            return lock(timecode_listeners_mutex_, [&] {
+                auto listener_id = last_timecode_listener_id++;
+                timecode_listeners_.insert(std::make_pair(listener_id, listener));
+
+                return std::shared_ptr<void>(nullptr, [=](void*) {
+                    lock(timecode_listeners_mutex_, [&] { timecode_listeners_.erase(listener_id); });
+                });
+            });
+        }
 };
 
 video_channel::video_channel(
@@ -299,11 +323,15 @@ core::audio_channel_layout video_channel::audio_channel_layout() const { return 
 void core::video_channel::audio_channel_layout(const core::audio_channel_layout& channel_layout) { impl_->audio_channel_layout(channel_layout); }
 boost::property_tree::wptree video_channel::info() const{return impl_->info();}
 boost::property_tree::wptree video_channel::delay_info() const { return impl_->delay_info(); }
-int video_channel::index() const { return impl_->index(); }
+int                          video_channel::index() const { return impl_->index(); }
 monitor::subject&            video_channel::monitor_output() { return *impl_->monitor_subject_; }
 std::shared_ptr<void>        video_channel::add_tick_listener(std::function<void()> listener)
 {
     return impl_->add_tick_listener(std::move(listener));
+}
+std::shared_ptr<void> video_channel::add_timecode_listener(std::function<void()> listener)
+{
+    return impl_->add_timecode_listener(std::move(listener));
 }
 const std::shared_ptr<core::channel_timecode> video_channel::timecode() const { return impl_->timecode_; }
 

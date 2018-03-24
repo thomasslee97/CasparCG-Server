@@ -192,11 +192,12 @@ class decklink_timecode : public IDeckLinkTimecode
     HRESULT
     GetComponents(unsigned char* hours, unsigned char* minutes, unsigned char* seconds, unsigned char* frames) override
     {
-        hours   = &timecode_.hours;
+        /* TODO - fix
+        hours   = &timecode_.hours();
         minutes = &timecode_.minutes;
         seconds = &timecode_.seconds;
         frames  = &timecode_.frames;
-
+        */
         return S_OK;
     }
 

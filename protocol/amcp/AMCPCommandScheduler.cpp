@@ -53,13 +53,12 @@ class AMCPScheduledCommand
         return res;
     }
 
-    bool has_passed_timecode(const core::frame_timecode& now) const
+    bool should_schedule(const core::frame_timecode& first_tc, const core::frame_timecode& last_tc) const
     {
         // TODO - account for dst/clock changing?
 
-        // TODO account for 24 hour wrap around problem
-
-        return timecode_ < now;
+        // TODO account for 24 hour wrap around problem        
+        return timecode_ <= last_tc && timecode_ >= first_tc;
     }
 
     std::shared_ptr<AMCPGroupCommand> create_command() const
@@ -128,7 +127,7 @@ class AMCPCommandSchedulerQueue
         if (token.empty())
             return false;
 
-        for (auto cmd = scheduled_commands_.begin(); cmd != scheduled_commands_.end(); ++cmd){
+        for (auto cmd = scheduled_commands_.begin(); cmd != scheduled_commands_.end(); ++cmd) {
             if (!cmd->get()->try_pop_token(token))
                 continue;
 
@@ -175,12 +174,13 @@ class AMCPCommandSchedulerQueue
     std::vector<std::shared_ptr<AMCPGroupCommand>> schedule()
     {
         std::vector<std::shared_ptr<AMCPGroupCommand>> res;
-        const core::frame_timecode                     now = channel_timecode_->timecode();
+        const core::frame_timecode                     last_tc  = channel_timecode_->timecode() + 1;
+        const core::frame_timecode                     first_tc = channel_timecode_->timecode() - (10 * last_tc.fps());
 
         // TODO - optimise once queue type has changed
         for (int i = 0; i < scheduled_commands_.size(); i++) {
             const auto cmd = scheduled_commands_[i];
-            if (cmd->has_passed_timecode(now)) {
+            if (cmd->should_schedule(first_tc, last_tc)) {
                 res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
                 --i;

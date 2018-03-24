@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author: 
+ * Author:
  */
 #pragma once
 
@@ -30,28 +30,44 @@ namespace caspar { namespace core {
 // TODO - make immutable
 struct frame_timecode
 {
-    uint8_t hours;
-    uint8_t minutes;
-    uint8_t seconds;
-    uint8_t frames;
-    uint8_t fps;
+    frame_timecode();
+    frame_timecode(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t frames, uint8_t fps);
 
-    bool is_valid() const { return fps != 0; }
+    uint8_t hours() const { return hours_; }
+    uint8_t minutes() const { return minutes_; }
+    uint8_t seconds() const { return seconds_; }
+    uint8_t frames() const { return frames_; }
+    uint8_t fps() const { return fps_; }
+
+    bool is_valid() const { return fps_ != 0; }
 
     static const frame_timecode& get_default();
     static bool                  parse_string(const std::wstring& str, frame_timecode& res);
 
     //    static const frame_timecode& from_int(uint64_t frame_count, const struct pixel_format_desc* format);
 
-    // void operator++();
-
     bool operator<(const frame_timecode& other) const;
+    bool operator>(const frame_timecode& other) const;
+    bool operator<=(const frame_timecode& other) const;
+    bool operator>=(const frame_timecode& other) const;
 
     bool operator==(const frame_timecode& other) const;
     bool operator!=(const frame_timecode& other) const;
 
+    frame_timecode operator+=(int frames);
+    frame_timecode operator-=(int frames);
+    frame_timecode operator+(int frames) const;
+    frame_timecode operator-(int frames) const;
+
     const std::wstring string() const;
     unsigned int       bcd() const;
+
+  private:
+    uint8_t hours_;
+    uint8_t minutes_;
+    uint8_t seconds_;
+    uint8_t frames_;
+    uint8_t fps_;
 };
 
 // this is mutable, updated by decklink_producer and can return frame_timecode for use by consumers

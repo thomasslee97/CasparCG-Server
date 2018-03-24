@@ -107,7 +107,7 @@ class AMCPProtocolStrategy
             auto queue = spl::make_shared<AMCPCommandQueue>(
                 L"Channel " + boost::lexical_cast<std::wstring>(i + 1) + L" for " + name, repo_->channels());
             scheduler_->add_channel(ch.channel->timecode());
-            schedule_ops_.push_back(ch.channel->add_tick_listener([&, i, queue] {
+            schedule_ops_.push_back(ch.channel->add_timecode_listener([&, i, queue] {
                 const auto cmds = scheduler_->schedule(i);
                 if (!cmds) {
                     // TODO - report failed to lock to diag

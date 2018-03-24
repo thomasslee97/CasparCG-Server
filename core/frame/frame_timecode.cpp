@@ -16,59 +16,55 @@
  * You should have received a copy of the GNU General Public License
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author: 
+ * Author:
  */
 #include "frame_timecode.h"
 
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/format.hpp>
 #include <common/future.h>
 
-#include <sstream>
-
 namespace caspar { namespace core {
 
-void channel_timecode::tick()
-{
-    timecode_.frames++;
-    if (timecode_.frames >= 50) // TODO - account for framerate & drop frame
-    {
-        timecode_.frames = 0;
-        timecode_.seconds++;
-    }
-    if (timecode_.seconds >= 60) {
-        timecode_.seconds = 0;
-        timecode_.minutes++;
-    }
-    if (timecode_.minutes >= 60) {
-        timecode_.minutes = 0;
-        timecode_.hours++;
-    }
-    if (timecode_.hours >= 24) {
-        timecode_.hours = 0;
-    }
-}
+void channel_timecode::tick() { timecode_ += 1; }
 
 const std::wstring frame_timecode::string() const
 {
-    return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours % minutes % seconds % frames).str();
+    return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours_ % minutes_ % seconds_ % frames_).str();
 }
 
 unsigned int frame_timecode::bcd() const
 {
     unsigned int res = 0;
 
-    res += ((hours / 10) << 4) + (hours % 10);
+    res += ((hours_ / 10) << 4) + (hours_ % 10);
     res <<= 8;
-    res += ((minutes / 10) << 4) + (minutes % 10);
+    res += ((minutes_ / 10) << 4) + (minutes_ % 10);
     res <<= 8;
-    res += ((seconds / 10) << 4) + (seconds % 10);
+    res += ((seconds_ / 10) << 4) + (seconds_ % 10);
     res <<= 8;
-    res += ((frames / 10) << 4) + (frames % 10);
+    res += ((frames_ / 10) << 4) + (frames_ % 10);
 
     return res;
+}
+
+frame_timecode::frame_timecode()
+    : hours_(0)
+    , minutes_(0)
+    , seconds_(0)
+    , frames_(0)
+    , fps_(0)
+{
+}
+
+frame_timecode::frame_timecode(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t frames, uint8_t fps)
+    : hours_(hours)
+    , minutes_(minutes)
+    , seconds_(seconds)
+    , frames_(frames)
+    , fps_(fps)
+{
 }
 
 const frame_timecode& frame_timecode::get_default()
@@ -90,12 +86,13 @@ bool frame_timecode::parse_string(const std::wstring& str, frame_timecode& res)
         return false;
 
     try {
-        res         = core::frame_timecode();
-        res.hours   = static_cast<uint8_t>(std::stoi(strs[0]));
-        res.minutes = static_cast<uint8_t>(std::stoi(strs[1]));
-        res.seconds = static_cast<uint8_t>(std::stoi(strs[2]));
-        res.frames  = static_cast<uint8_t>(std::stoi(strs[3]));
-        // TODO fps?
+        const uint8_t hours   = static_cast<uint8_t>(std::stoi(strs[0]));
+        const uint8_t minutes = static_cast<uint8_t>(std::stoi(strs[1]));
+        const uint8_t seconds = static_cast<uint8_t>(std::stoi(strs[2]));
+        const uint8_t frames  = static_cast<uint8_t>(std::stoi(strs[3]));
+
+        // TODO fps
+        res = core::frame_timecode(hours, minutes, seconds, frames, 50);
         return true;
     } catch (...) {
         return false;
@@ -109,35 +106,57 @@ bool frame_timecode::parse_string(const std::wstring& str, frame_timecode& res)
 
 bool frame_timecode::operator<(const frame_timecode& other) const
 {
-    if (hours != other.hours)
-        return hours < other.hours;
+    if (hours_ != other.hours_)
+        return hours_ < other.hours_;
 
-    if (minutes != other.minutes)
-        return minutes < other.minutes;
+    if (minutes_ != other.minutes_)
+        return minutes_ < other.minutes_;
 
-    if (seconds != other.seconds)
-        return seconds < other.seconds;
+    if (seconds_ != other.seconds_)
+        return seconds_ < other.seconds_;
 
-    if (frames != other.frames)
-        return frames < other.frames;
+    if (frames_ != other.frames_)
+        return frames_ < other.frames_;
 
     // TODO - account for framerate
 
     return false;
 }
 
+bool frame_timecode::operator>(const frame_timecode& other) const
+{
+    if (hours_ != other.hours_)
+        return hours_ > other.hours_;
+
+    if (minutes_ != other.minutes_)
+        return minutes_ > other.minutes_;
+
+    if (seconds_ != other.seconds_)
+        return seconds_ > other.seconds_;
+
+    if (frames_ != other.frames_)
+        return frames_ > other.frames_;
+
+    // TODO - account for framerate
+
+    return false;
+}
+
+bool frame_timecode::operator<=(const frame_timecode& other) const { return other > *this; }
+bool frame_timecode::operator>=(const frame_timecode& other) const { return other < *this; }
+
 bool frame_timecode::operator==(const frame_timecode& other) const
 {
-    if (hours != other.hours)
+    if (hours_ != other.hours_)
         return false;
 
-    if (minutes != other.minutes)
+    if (minutes_ != other.minutes_)
         return false;
 
-    if (seconds != other.seconds)
+    if (seconds_ != other.seconds_)
         return false;
 
-    if (frames != other.frames)
+    if (frames_ != other.frames_)
         return false;
 
     // TODO - account for framerate
@@ -145,29 +164,52 @@ bool frame_timecode::operator==(const frame_timecode& other) const
     return true;
 }
 
+frame_timecode validate(const frame_timecode& timecode, int delta)
+{
+    const uint8_t fps = 50; // TODO dynamic
+
+    int frames        = timecode.frames() + delta;
+    int delta_seconds = frames / fps;
+    frames %= fps;
+    if (frames < 0) {
+        frames += fps;
+        delta_seconds -= 1;
+    }
+
+    int seconds       = timecode.seconds() + delta_seconds;
+    int delta_minutes = seconds / 60;
+    seconds %= 60;
+    if (seconds < 0) {
+        seconds += 60;
+        delta_minutes -= 1;
+    }
+
+    int minutes     = timecode.minutes() + delta_minutes;
+    int delta_hours = minutes / 60;
+    minutes %= 60;
+    if (minutes < 0) {
+        minutes += 60;
+        delta_hours -= 1;
+    }
+
+    int hours = timecode.hours() + delta_hours;
+    hours %= 24;
+    if (hours < 0) {
+        hours += 24;
+    }
+
+    return frame_timecode(static_cast<uint8_t>(hours),
+                          static_cast<uint8_t>(minutes),
+                          static_cast<uint8_t>(seconds),
+                          static_cast<uint8_t>(frames),
+                          fps);
+}
+
 bool frame_timecode::operator!=(const frame_timecode& other) const { return !((*this) == other); }
 
-// void frame_timecode::operator++() {
-//    frames++;
-//    if (frames >= 50)
-//    {
-//        frames = 0;
-//        seconds++;
-//    }
-//    if (seconds >= 60)
-//    {
-//        seconds = 0;
-//        minutes++;
-//    }
-//    if (minutes >= 60)
-//    {
-//        minutes = 0;
-//        hours++;
-//    }
-//    if (hours >= 24)
-//    {
-//        hours = 0;
-//    }
-//}
+frame_timecode frame_timecode::operator+=(int delta) { return *this = validate(*this, delta); }
+frame_timecode frame_timecode::operator-=(int delta) { return *this = validate(*this, -delta); }
+frame_timecode frame_timecode::operator+(int delta) const { return validate(*this, delta); }
+frame_timecode frame_timecode::operator-(int delta) const { return validate(*this, -delta); }
 
 }} // namespace caspar::core
