@@ -28,9 +28,7 @@
 
 namespace caspar { namespace protocol { namespace amcp {
 
-    
-// TODO - abstract out?
-bool cmd_exec(bool is_batch, std::shared_ptr<AMCPCommand> pCurrentCommand)
+bool cmd_exec(bool batch_has_client, std::shared_ptr<AMCPCommand> pCurrentCommand)
 {
     try {
         try {
@@ -39,7 +37,7 @@ bool cmd_exec(bool is_batch, std::shared_ptr<AMCPCommand> pCurrentCommand)
             auto name = pCurrentCommand->name();
             CASPAR_LOG(debug) << "Executing command: " << name;
 
-            pCurrentCommand->Execute(!is_batch);
+            pCurrentCommand->Execute(batch_has_client);
 
             CASPAR_LOG(debug) << "Executed command (" << timer.elapsed() << "s): " << name;
             return true;
@@ -80,23 +78,27 @@ void AMCPCommand::Execute(bool reply_without_req_id)
     }
 }
 
-void AMCPCommand::SendReply(const std::wstring& str) const
+void send_reply(IO::ClientInfoPtrStd client, const std::wstring& str, const std::wstring& request_id)
 {
     if (str.empty())
         return;
 
     std::wstring reply = str;
-    if (!request_id_.empty())
-        reply = L"RES " + request_id_ + L" " + str;
+    if (!request_id.empty())
+        reply = L"RES " + request_id + L" " + str;
 
-    ctx_.client->send(std::move(reply));
+    client->send(std::move(reply));
 }
+
+void AMCPCommand::SendReply(const std::wstring& str) const { send_reply(ctx_.client, str, request_id_); }
 
 bool AMCPGroupCommand::Execute(const std::vector<channel_context>& channels_ctx) const
 {
     caspar::timer timer;
 
-    if (is_batch_) {
+    const bool is_batch = commands_.size() > 1;
+
+    if (is_batch) {
         CASPAR_LOG(debug) << "Executing command: " << name();
     }
 
@@ -109,30 +111,33 @@ bool AMCPGroupCommand::Execute(const std::vector<channel_context>& channels_ctx)
         channels.insert(cmd->channel_index());
     }
 
-    // TODO - this will not work if a batch inside a batch
     // TODO - this does not handle swap commands at all well
     std::vector<std::unique_lock<std::mutex>> locks;
     // This runs sequentially through channel indixes to remove chance of race conditions if multiple run at once
-    for (const int ch : channels) {
-        if (ch < 0 || ch >= channels_ctx.size())
-            continue;
+    if (is_batch) { // TODO - can this be done with causing threading issues?
+        for (const int ch : channels) {
+            if (ch < 0 || ch >= channels_ctx.size())
+                continue;
 
-        locks.push_back(channels_ctx.at(ch).channel->stage().get_lock());
+            locks.push_back(channels_ctx.at(ch).channel->stage().get_lock());
+        }
     }
-
-    // TODO - guard against a recursive circle of commands (just in case)
 
     int failed_count = 0;
 
+    const bool has_client = !!client_;
     for (const auto cmd : commands_) {
-        if (!cmd_exec(is_batch_, cmd)) {
+        if (!cmd_exec(has_client || !is_batch, cmd)) {
             failed_count++;
         }
     }
 
     locks.clear();
 
-    // TODO - send success reply if request id?
+    if (client_) {
+        // TODO - report failures?
+        send_reply(client_, L"202 COMMIT OK\r\n", request_id_);
+    }
 
     CASPAR_LOG(debug) << "Executed command (" << timer.elapsed() << "s): " << name();
 
@@ -141,18 +146,22 @@ bool AMCPGroupCommand::Execute(const std::vector<channel_context>& channels_ctx)
 
 void AMCPGroupCommand::SendReply(const std::wstring& str) const
 {
-    if (!is_batch_) {
-        commands_.at(0)->SendReply(str);
+    if (client_) {
+        send_reply(client_, str, request_id_);
         return;
     }
 
-    // TODO - send reply if has request id?
+    if (commands_.size() == 1) {
+        commands_.at(0)->SendReply(str);
+    }
+
 }
 
 std::wstring AMCPGroupCommand::name() const
 {
-    if (!is_batch_)
+    if (commands_.size() == 1) {
         return commands_.at(0)->name();
+    }
 
     return L"BATCH"; // TODO include count
 }

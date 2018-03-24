@@ -53,10 +53,11 @@ class AMCPScheduledCommand
         return res;
     }
 
-    // TODO - will this be needed later?
-    bool has_passed_timecode(core::frame_timecode& now) const
+    bool has_passed_timecode(const core::frame_timecode& now) const
     {
-        // TODO - account for dst/clock changing.
+        // TODO - account for dst/clock changing?
+
+        // TODO account for 24 hour wrap around problem
 
         return timecode_ < now;
     }
@@ -68,7 +69,7 @@ class AMCPScheduledCommand
             cmds.push_back(cmd.second);
         }
 
-        return std::move(std::make_shared<AMCPGroupCommand>(cmds, L""));
+        return std::move(std::make_shared<AMCPGroupCommand>(cmds));
     }
 
     std::vector<std::pair<core::frame_timecode, std::wstring>> get_tokens()
@@ -127,11 +128,16 @@ class AMCPCommandSchedulerQueue
         if (token.empty())
             return false;
 
-        for (auto cmd : scheduled_commands_) {
-            if (cmd->try_pop_token(token))
-                return true;
+        for (auto cmd = scheduled_commands_.begin(); cmd != scheduled_commands_.end(); ++cmd){
+            if (!cmd->get()->try_pop_token(token))
+                continue;
 
-            // TODO - should propbably discard this scheduled_command if it is empty
+            // Discard slot if now empty
+            if (cmd->get()->get_tokens().size() == 0) {
+                scheduled_commands_.erase(cmd);
+            }
+
+            return true;
         }
 
         return false;
@@ -174,7 +180,7 @@ class AMCPCommandSchedulerQueue
         // TODO - optimise once queue type has changed
         for (int i = 0; i < scheduled_commands_.size(); i++) {
             const auto cmd = scheduled_commands_[i];
-            if (cmd->timecode() < now) {
+            if (cmd->has_passed_timecode(now)) {
                 res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
                 --i;
@@ -291,8 +297,8 @@ struct AMCPCommandScheduler::Impl
     boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index)
     {
         // TODO - tweak this timeout
+        // Timeout on lock aquiring. This is to stop channel output stalling
         timeout_lock lock(lock_, 5);
-
         if (!lock.is_locked())
             return boost::none;
 

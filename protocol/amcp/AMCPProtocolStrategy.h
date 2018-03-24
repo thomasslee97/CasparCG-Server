@@ -33,13 +33,13 @@
 namespace caspar { namespace protocol { namespace amcp {
 
 IO::protocol_strategy_factory<char>::ptr
-create_char_amcp_strategy_factory(const std::wstring&                                   name,
+create_char_amcp_strategy_factory(const std::wstring&                             name,
                                   const spl::shared_ptr<amcp_command_repository>& repo,
-                                  const spl::shared_ptr<AMCPCommandScheduler>&          scheduler);
+                                  const spl::shared_ptr<AMCPCommandScheduler>&    scheduler);
 
 IO::protocol_strategy_factory<wchar_t>::ptr
-create_wchar_amcp_strategy_factory(const std::wstring&                                   name,
+create_wchar_amcp_strategy_factory(const std::wstring&                             name,
                                    const spl::shared_ptr<amcp_command_repository>& repo,
-                                   const spl::shared_ptr<AMCPCommandScheduler>&          scheduler);
+                                   const spl::shared_ptr<AMCPCommandScheduler>&    scheduler);
 
 }}} // namespace caspar::protocol::amcp

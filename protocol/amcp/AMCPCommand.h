@@ -35,10 +35,10 @@ class AMCPCommand
     const std::wstring           request_id_;
 
   public:
-    AMCPCommand(const command_context_simple&    ctx,
-                const amcp_command_func&         command,
-                const std::wstring&              name,
-                const std::wstring&              request_id)
+    AMCPCommand(const command_context_simple& ctx,
+                const amcp_command_func&      command,
+                const std::wstring&           name,
+                const std::wstring&           request_id)
         : ctx_(ctx)
         , command_(command)
         , name_(name)
@@ -60,21 +60,32 @@ class AMCPCommand
 class AMCPGroupCommand
 {
     const std::vector<std::shared_ptr<AMCPCommand>> commands_;
+    const IO::ClientInfoPtrStd                      client_;
     const std::wstring                              request_id_;
     const bool                                      is_batch_;
 
   public:
-    AMCPGroupCommand(const std::vector<std::shared_ptr<AMCPCommand>> commands, const std::wstring& request_id)
+    AMCPGroupCommand(const std::vector<std::shared_ptr<AMCPCommand>> commands,
+                     IO::ClientInfoPtrStd                               client,
+                     const std::wstring&                             request_id)
         : commands_(commands)
+        , client_(client)
         , request_id_(request_id)
         , is_batch_(true)
     {
-        // TODO - needs a client, to send responses to, if needed. when scheduled, the response should be sent to the
-        // child commands clients?
+    }
+
+    AMCPGroupCommand(const std::vector<std::shared_ptr<AMCPCommand>> commands)
+        : commands_(commands)
+        , client_(nullptr)
+        , request_id_(L"")
+        , is_batch_(true)
+    {
     }
 
     AMCPGroupCommand(const std::shared_ptr<AMCPCommand> command)
         : commands_({command})
+        , client_(nullptr)
         , request_id_(L"")
         , is_batch_(false)
     {

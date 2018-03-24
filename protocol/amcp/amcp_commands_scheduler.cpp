@@ -110,7 +110,6 @@ std::wstring schedule_set_command(command_context& ctx)
 
     if (channel_index < 0) {
         // Only channel commands can be scheduled
-        // TODO - this might change if queues are reshuffled
         return L"503 SCHEDULE SET FAILED\r\n";
     }
 

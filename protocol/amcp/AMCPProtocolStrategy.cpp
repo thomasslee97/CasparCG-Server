@@ -34,6 +34,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/log/keywords/delimiter.hpp>
 
+#include "amcp_command_context.h"
 #include "protocol/util/strategy_adapters.h"
 
 #if defined(_MSC_VER)
@@ -44,32 +45,44 @@ namespace caspar { namespace protocol { namespace amcp {
 
 using IO::ClientInfoPtr;
 
-class AMCPTransactionInfo
+class AMCPClientBatchInfo
 {
   public:
-    AMCPTransactionInfo()
-        : commands_()
+    AMCPClientBatchInfo(const IO::client_connection<wchar_t>::ptr client)
+        : client_(client)
+        , commands_()
         , in_progress_(false)
     {
     }
-    ~AMCPTransactionInfo() { commands_.clear(); }
+    ~AMCPClientBatchInfo() { commands_.clear(); }
 
-    void add_command(const AMCPCommand::ptr_type cmd)
+    void add_command(const AMCPCommand::ptr_type cmd) { commands_.push_back(cmd); }
+
+    std::shared_ptr<AMCPGroupCommand> finish()
     {
-        in_progress_ = true;
-        commands_.push_back(cmd);
+        const auto res = std::make_shared<AMCPGroupCommand>(commands_, client_, request_id_);
+
+        in_progress_ = false;
+        commands_.clear();
+
+        return std::move(res);
     }
 
-    void finish_transaction()
+    void begin(const std::wstring& request_id)
     {
-        // TODO return created command
-        in_progress_ = false;
+        request_id_  = request_id;
+        in_progress_ = true;
         commands_.clear();
     }
 
+    bool                in_progress() const { return in_progress_; }
+    const std::wstring& request_id() const { return request_id_; }
+
   private:
-    std::vector<AMCPCommand::ptr_type> commands_;
-    bool                               in_progress_;
+    const IO::client_connection<wchar_t>::ptr client_;
+    std::vector<AMCPCommand::ptr_type>        commands_;
+    bool                                      in_progress_;
+    std::wstring                              request_id_;
 };
 
 class AMCPProtocolStrategy
@@ -78,8 +91,7 @@ class AMCPProtocolStrategy
     std::vector<AMCPCommandQueue::ptr_type>  commandQueues_;
     spl::shared_ptr<amcp_command_repository> repo_;
     spl::shared_ptr<AMCPCommandScheduler>    scheduler_;
-
-    std::vector<std::shared_ptr<void>> schedule_ops_; // TODO destructing?
+    std::vector<std::shared_ptr<void>>       schedule_ops_;
 
   public:
     AMCPProtocolStrategy(const std::wstring&                             name,
@@ -92,8 +104,8 @@ class AMCPProtocolStrategy
 
         int i = 0;
         for (const auto& ch : repo_->channels()) {
-            auto queue = spl::make_shared<AMCPCommandQueue>(L"Channel " + boost::lexical_cast<std::wstring>(i + 1) +
-                                                            L" for " + name, repo_->channels());
+            auto queue = spl::make_shared<AMCPCommandQueue>(
+                L"Channel " + boost::lexical_cast<std::wstring>(i + 1) + L" for " + name, repo_->channels());
             scheduler_->add_channel(ch.channel->timecode());
             schedule_ops_.push_back(ch.channel->add_tick_listener([&, i, queue] {
                 const auto cmds = scheduler_->schedule(i);
@@ -124,7 +136,7 @@ class AMCPProtocolStrategy
 
     // The paser method expects message to be complete messages with the delimiter stripped away.
     // Therefore the AMCPProtocolStrategy should be decorated with a delimiter_based_chunking_strategy
-    void parse(const std::wstring& message, ClientInfoPtr client, std::shared_ptr<AMCPTransactionInfo> transaction)
+    void parse(const std::wstring& message, ClientInfoPtr client, const std::shared_ptr<AMCPClientBatchInfo>& batch)
     {
         std::list<std::wstring> tokens;
         tokenize(message, tokens);
@@ -142,13 +154,11 @@ class AMCPProtocolStrategy
             return;
         }
 
-        // TODO - transaction handling
-
         CASPAR_LOG(info) << L"Received message from " << client->address() << ": " << message << L"\\r\\n";
 
         std::wstring request_id;
         std::wstring command_name;
-        error_state  err = parse_command_string(client, tokens, request_id, command_name);
+        error_state  err = parse_command_string(client, batch, tokens, request_id, command_name);
         if (err != error_state::no_error) {
             std::wstringstream answer;
 
@@ -181,17 +191,18 @@ class AMCPProtocolStrategy
     }
 
   private:
-    error_state parse_command_string(ClientInfoPtr           client,
-                                     std::list<std::wstring> tokens,
-                                     std::wstring&           request_id,
-                                     std::wstring&           command_name)
+    error_state parse_command_string(ClientInfoPtr                               client,
+                                     const std::shared_ptr<AMCPClientBatchInfo>& batch,
+                                     std::list<std::wstring>                     tokens,
+                                     std::wstring&                               request_id,
+                                     std::wstring&                               command_name)
     {
         try {
             // Discard GetSwitch
             if (!tokens.empty() && tokens.front().at(0) == L'/')
                 tokens.pop_front();
 
-            const error_state error = parse_request_token(tokens, request_id);
+            error_state error = parse_request_token(tokens, request_id);
             if (error != error_state::no_error) {
                 return error;
             }
@@ -199,6 +210,10 @@ class AMCPProtocolStrategy
             // Fail if no more tokens.
             if (tokens.empty()) {
                 return error_state::command_error;
+            }
+
+            if (parse_batch_commands(batch, tokens, request_id, error)) {
+                return error;
             }
 
             command_name                               = boost::to_upper_copy(tokens.front());
@@ -210,6 +225,11 @@ class AMCPProtocolStrategy
             const int channel_index = command->channel_index();
             if (!repo_->check_channel_lock(client, channel_index)) {
                 return error_state::access_error;
+            }
+
+            if (batch->in_progress()) {
+                batch->add_command(command);
+                return error_state::no_error;
             }
 
             auto wrapped = std::make_shared<AMCPGroupCommand>(command);
@@ -241,6 +261,45 @@ class AMCPProtocolStrategy
         tokens.pop_front();
 
         return error_state::no_error;
+    }
+
+    bool parse_batch_commands(const std::shared_ptr<AMCPClientBatchInfo>& batch,
+                              std::list<std::wstring>&                    tokens,
+                              std::wstring&                               request_id,
+                              error_state&                                error)
+    {
+        if (boost::iequals(tokens.front(), L"COMMIT")) {
+            if (!batch->in_progress()) {
+                error = error_state::command_error;
+                return true;
+            }
+
+            commandQueues_.at(0)->AddCommand(std::move(batch->finish()));
+            error = error_state::no_error;
+            return true;
+        }
+        if (boost::iequals(tokens.front(), L"BEGIN")) {
+            if (batch->in_progress()) {
+                error = error_state::command_error;
+                return true;
+            }
+
+            batch->begin(request_id);
+            error = error_state::no_error;
+            return true;
+        }
+        if (boost::iequals(tokens.front(), L"DISCARD")) {
+            if (!batch->in_progress()) {
+                error = error_state::command_error;
+                return true;
+            }
+
+            batch->finish();
+            error = error_state::no_error;
+            return true;
+        }
+
+        return false;
     }
 
     template <typename C>
@@ -310,27 +369,22 @@ class AMCPProtocolStrategy
     }
 };
 
-// TODO - tidy below here (but it must remain here)
 class AMCPClientStrategy : public IO::protocol_strategy<wchar_t>
 {
     const std::shared_ptr<AMCPProtocolStrategy> strategy_;
-    const std::shared_ptr<AMCPTransactionInfo>  transaction_;
+    const std::shared_ptr<AMCPClientBatchInfo>  batch_;
     ClientInfoPtr                               client_info_;
-    // TODO - transaction info
 
   public:
     AMCPClientStrategy(const std::shared_ptr<AMCPProtocolStrategy>& strategy,
                        const IO::client_connection<wchar_t>::ptr&   client_connection)
         : strategy_(strategy)
-        , transaction_(std::make_shared<AMCPTransactionInfo>())
+        , batch_(std::make_shared<AMCPClientBatchInfo>(client_connection))
         , client_info_(client_connection)
     {
     }
 
-    void parse(const std::basic_string<wchar_t>& data) override
-    {
-        strategy_->parse(data, client_info_, transaction_); // TODO - transaction info
-    }
+    void parse(const std::basic_string<wchar_t>& data) override { strategy_->parse(data, client_info_, batch_); }
 };
 
 class amcp_client_strategy_factory : public IO::protocol_strategy_factory<wchar_t>
