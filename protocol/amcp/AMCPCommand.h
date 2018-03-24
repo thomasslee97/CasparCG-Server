@@ -29,23 +29,21 @@ namespace caspar { namespace protocol { namespace amcp {
 class AMCPCommand
 {
   private:
-    command_context_simple  ctx_;
-    const amcp_command_func command_;
-    const std::wstring      name_;
-    const std::wstring      request_id_;
+    const command_context_simple ctx_;
+    const amcp_command_func      command_;
+    const std::wstring           name_;
+    const std::wstring           request_id_;
 
   public:
     AMCPCommand(const command_context_simple&    ctx,
                 const amcp_command_func&         command,
                 const std::wstring&              name,
-                const std::wstring&              request_id,
-                const std::vector<std::wstring>& parameters)
+                const std::wstring&              request_id)
         : ctx_(ctx)
         , command_(command)
         , name_(name)
         , request_id_(request_id)
     {
-        ctx_.parameters = parameters;
     }
 
     typedef std::shared_ptr<AMCPCommand> ptr_type;

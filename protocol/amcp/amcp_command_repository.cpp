@@ -30,10 +30,26 @@
 
 namespace caspar { namespace protocol { namespace amcp {
 
+AMCPCommand::ptr_type make_cmd(amcp_command_func        func,
+                               const std::wstring&      name,
+                               const std::wstring&      id,
+                               IO::ClientInfoPtr        client,
+                               unsigned int             channel_index,
+                               int                      layer_index,
+                               std::list<std::wstring>& tokens)
+{
+    const std::vector<std::wstring> parameters(tokens.begin(), tokens.end());
+    const command_context_simple    ctx(std::move(client), channel_index, layer_index, std::move(parameters));
+
+    return std::make_shared<AMCPCommand>(ctx, func, name, id);
+}
+
 AMCPCommand::ptr_type find_command(const std::map<std::wstring, std::pair<amcp_command_func, int>>& commands,
                                    const std::wstring&                                              name,
                                    const std::wstring&                                              id,
-                                   const command_context_simple&                                    ctx,
+                                   IO::ClientInfoPtr                                                client,
+                                   int                                                              channel_index,
+                                   int                                                              layer_index,
                                    std::list<std::wstring>&                                         tokens)
 {
     std::wstring subcommand;
@@ -50,9 +66,7 @@ AMCPCommand::ptr_type find_command(const std::map<std::wstring, std::pair<amcp_c
             tokens.pop_front();
 
             if (tokens.size() >= subcmd->second.second) {
-                const std::vector<std::wstring> parameters(tokens.begin(), tokens.end());
-
-                return std::make_shared<AMCPCommand>(ctx, subcmd->second.first, s, id, std::move(parameters));
+                return make_cmd(subcmd->second.first, s, id, std::move(client), channel_index, layer_index, tokens);
             }
         }
     }
@@ -61,9 +75,7 @@ AMCPCommand::ptr_type find_command(const std::map<std::wstring, std::pair<amcp_c
     const auto command = commands.find(name);
 
     if (command != commands.end() && tokens.size() >= command->second.second) {
-        const std::vector<std::wstring> parameters(tokens.begin(), tokens.end());
-
-        return std::make_shared<AMCPCommand>(ctx, command->second.first, name, id, std::move(parameters));
+        return make_cmd(command->second.first, name, id, std::move(client), channel_index, layer_index, tokens);
     }
 
     return nullptr;
@@ -105,14 +117,13 @@ parse_channel_id(std::list<std::wstring>& tokens, std::wstring& channel_spec, in
 
 struct amcp_command_repository::impl
 {
-    const std::vector<channel_context> channels_;
-    const spl::shared_ptr<core::help_repository>               help_repo_;
+    const std::vector<channel_context>           channels_;
+    const spl::shared_ptr<core::help_repository> help_repo_;
 
     std::map<std::wstring, std::pair<amcp_command_func, int>> commands{};
     std::map<std::wstring, std::pair<amcp_command_func, int>> channel_commands{};
 
-    impl(const std::vector<channel_context>& channels,
-    const spl::shared_ptr<core::help_repository>&                 help_repo)
+    impl(const std::vector<channel_context>& channels, const spl::shared_ptr<core::help_repository>& help_repo)
         : channels_(channels)
         , help_repo_(help_repo)
     {
@@ -123,9 +134,7 @@ struct amcp_command_repository::impl
                                          IO::ClientInfoPtr        client,
                                          std::list<std::wstring>& tokens) const
     {
-        const command_context_simple ctx(std::move(client), -1, -1);
-
-        auto command = find_command(commands, name, id, ctx, tokens);
+        auto command = find_command(commands, name, id, std::move(client), -1, -1, tokens);
 
         if (command)
             return command;
@@ -143,9 +152,7 @@ struct amcp_command_repository::impl
         if (channels_.size() <= channel_index)
             return nullptr;
 
-        const command_context_simple ctx(std::move(client), channel_index, layer_index);
-
-        auto command = find_command(channel_commands, name, id, ctx, tokens);
+        auto command = find_command(channel_commands, name, id, std::move(client), channel_index, layer_index, tokens);
 
         if (command)
             return command;
@@ -153,9 +160,8 @@ struct amcp_command_repository::impl
         return nullptr;
     }
 
-    std::shared_ptr<AMCPCommand> parse_command(IO::ClientInfoPtr       client,
-                                                   std::list<std::wstring> tokens,
-                                                   const std::wstring&     request_id) const
+    std::shared_ptr<AMCPCommand>
+    parse_command(IO::ClientInfoPtr client, std::list<std::wstring> tokens, const std::wstring& request_id) const
     {
         // Consume command name
         const std::basic_string<wchar_t> command_name = boost::to_upper_copy(tokens.front());
@@ -197,9 +203,8 @@ struct amcp_command_repository::impl
     }
 };
 
-amcp_command_repository::amcp_command_repository(
-    const std::vector<channel_context>&      channels,
-    const spl::shared_ptr<core::help_repository>&                 help_repo)
+amcp_command_repository::amcp_command_repository(const std::vector<channel_context>&           channels,
+                                                 const spl::shared_ptr<core::help_repository>& help_repo)
     : impl_(new impl(channels, help_repo))
 {
 }
@@ -207,8 +212,8 @@ amcp_command_repository::amcp_command_repository(
 const std::vector<channel_context>& amcp_command_repository::channels() const { return impl_->channels_; }
 
 std::shared_ptr<AMCPCommand> amcp_command_repository::parse_command(IO::ClientInfoPtr       client,
-                                                                        std::list<std::wstring> tokens,
-                                                                        const std::wstring&     request_id) const
+                                                                    std::list<std::wstring> tokens,
+                                                                    const std::wstring&     request_id) const
 {
     return impl_->parse_command(client, tokens, request_id);
 }

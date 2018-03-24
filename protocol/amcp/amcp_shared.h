@@ -24,14 +24,15 @@ struct command_context_simple
     const IO::ClientInfoPtr   client;
     const int                 channel_index;
     const int                 layer_id;
-    std::vector<std::wstring> parameters; // TODO - const?
+    const std::vector<std::wstring> parameters;
 
     int layer_index(int default_ = 0) const { return layer_id == -1 ? default_ : layer_id; }
 
-    command_context_simple(IO::ClientInfoPtr client, int channel_index, int layer_id)
+    command_context_simple(IO::ClientInfoPtr client, int channel_index, int layer_id, const std::vector<std::wstring> parameters)
         : client(std::move(client))
         , channel_index(channel_index)
         , layer_id(layer_id)
+        , parameters(parameters)
     {
     }
 };
