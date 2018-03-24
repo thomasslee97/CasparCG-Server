@@ -82,6 +82,15 @@ class AMCPScheduledCommand
         return res;
     }
 
+    std::shared_ptr<AMCPCommand> find(const std::wstring& token)
+    {
+        const auto it = commands_.find(token);
+        if (it == commands_.end())
+            return nullptr;
+
+        return it->second;
+    }
+
     core::frame_timecode timecode() const { return timecode_; }
 };
 
@@ -146,10 +155,21 @@ class AMCPCommandSchedulerQueue
         return res;
     }
 
+    std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> find(const std::wstring& token)
+    {
+        for (auto command : scheduled_commands_) {
+            const auto cmd = command->find(token);
+            if (cmd)
+                return std::make_pair(command->timecode(), cmd);
+        }
+
+        return std::make_pair(core::frame_timecode::get_default(), nullptr);
+    }
+
     std::vector<std::shared_ptr<AMCPGroupCommand>> schedule()
     {
         std::vector<std::shared_ptr<AMCPGroupCommand>> res;
-        const core::frame_timecode                    now = channel_timecode_->timecode();
+        const core::frame_timecode                     now = channel_timecode_->timecode();
 
         // TODO - optimise once queue type has changed
         for (int i = 0; i < scheduled_commands_.size(); i++) {
@@ -168,8 +188,8 @@ class AMCPCommandSchedulerQueue
 
   private:
     std::shared_ptr<core::channel_timecode> channel_timecode_;
-    // TODO - this should be something sorted. it will make insertion more costly, but then finding and removing items
-    // will be a lot cheaper. would increase cost + complexty, and performance may not be an issue
+    // TODO - this should be something sorted. it will make insertion more costly, but then finding and removing
+    // items will be a lot cheaper. would increase cost + complexty, and performance may not be an issue
     std::vector<std::shared_ptr<AMCPScheduledCommand>> scheduled_commands_;
 };
 
@@ -185,9 +205,9 @@ struct AMCPCommandScheduler::Impl
         queues_.push_back(std::make_shared<AMCPCommandSchedulerQueue>(channel_timecode));
     }
 
-    void set(int                              channel_index,
-             const std::wstring&              token,
-             const core::frame_timecode&      timecode,
+    void set(int                          channel_index,
+             const std::wstring&          token,
+             const core::frame_timecode&  timecode,
              std::shared_ptr<AMCPCommand> command)
     {
         std::lock_guard<std::timed_mutex> lock(lock_);
@@ -238,6 +258,19 @@ struct AMCPCommandScheduler::Impl
         return res;
     }
 
+    std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> find(const std::wstring& token)
+    {
+        std::lock_guard<std::timed_mutex> lock(lock_);
+
+        for (auto queue : queues_) {
+            const auto res = queue->find(token);
+            if (res.first != core::frame_timecode::get_default())
+                return res;
+        }
+
+        return std::make_pair(core::frame_timecode::get_default(), nullptr);
+    }
+
     class timeout_lock
     {
       private:
@@ -277,9 +310,9 @@ void AMCPCommandScheduler::add_channel(std::shared_ptr<core::channel_timecode> c
     impl_->add_channel(channel_timecode);
 }
 
-void AMCPCommandScheduler::set(int                              channel_index,
-                               const std::wstring&              token,
-                               const core::frame_timecode&      timecode,
+void AMCPCommandScheduler::set(int                          channel_index,
+                               const std::wstring&          token,
+                               const core::frame_timecode&  timecode,
                                std::shared_ptr<AMCPCommand> command)
 {
     impl_->set(channel_index, token, timecode, command);
@@ -297,6 +330,11 @@ std::vector<std::pair<core::frame_timecode, std::wstring>> AMCPCommandScheduler:
 boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> AMCPCommandScheduler::schedule(int channel_index)
 {
     return impl_->schedule(channel_index);
+}
+
+std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> AMCPCommandScheduler::find(const std::wstring& token)
+{
+    return impl_->find(token);
 }
 
 }}} // namespace caspar::protocol::amcp

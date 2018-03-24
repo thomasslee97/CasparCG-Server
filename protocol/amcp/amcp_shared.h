@@ -37,6 +37,6 @@ struct command_context_simple
     }
 };
 
-typedef std::function<std::wstring(command_context_simple& args)> amcp_command_func;
+typedef std::function<std::wstring(const command_context_simple& args)> amcp_command_func;
 
 }}} // namespace caspar::protocol::amcp

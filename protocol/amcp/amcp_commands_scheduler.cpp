@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "amcp_commands_scheduler.h"
 #include "amcp_command_context.h"
+#include "amcp_commands_scheduler.h"
 
 namespace caspar { namespace protocol { namespace amcp {
 
@@ -69,6 +69,22 @@ std::wstring schedule_list_command(command_context& ctx)
     return replyString.str();
 }
 
+std::wstring schedule_info_command(command_context& ctx)
+{
+    const auto token    = ctx.parameters.at(0);
+    const auto info = ctx.static_context.scheduler->find(token);
+
+    if (info.first == core::frame_timecode::get_default() || !info.second) {
+        return L"403 SCHEDULE INFO ERROR\r\n";
+    }
+
+    std::wstringstream replyString;
+    replyString << L"201 SCHEDULE INFO OK\r\n";
+    replyString << info.first.string();
+    replyString << L"\r\n";
+    return replyString.str();
+}
+
 std::wstring schedule_set_command(command_context& ctx)
 {
     std::wstring schedule_token = ctx.parameters.at(0);
@@ -81,9 +97,8 @@ std::wstring schedule_set_command(command_context& ctx)
         return L"403 SCHEDULE SET ERROR\r\n";
     }
 
-    const std::list<std::wstring>    tokens(ctx.parameters.begin() + 2, ctx.parameters.end());
-    std::shared_ptr<AMCPCommand> command =
-        ctx.static_context.parser->parse_command(ctx.client, tokens, schedule_token);
+    const std::list<std::wstring> tokens(ctx.parameters.begin() + 2, ctx.parameters.end());
+    std::shared_ptr<AMCPCommand> command = ctx.static_context.parser->parse_command(ctx.client, tokens, schedule_token);
     if (!command) {
         return L"403 SCHEDULE SET ERROR\r\n";
     }
@@ -111,11 +126,12 @@ std::wstring schedule_set_command(command_context& ctx)
 void register_scheduler_commands(amcp_command_repository_wrapper& repo)
 {
     repo.register_command(L"Scheduler Commands", L"SCHEDULE REMOVE", nullptr, schedule_remove_command, 1);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE CLEAR",  nullptr, schedule_clear_command, 0);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE LIST",  nullptr, schedule_list_command, 0);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE SET",  nullptr, schedule_set_command, 3);
+    repo.register_command(L"Scheduler Commands", L"SCHEDULE CLEAR", nullptr, schedule_clear_command, 0);
+    repo.register_command(L"Scheduler Commands", L"SCHEDULE LIST", nullptr, schedule_list_command, 0);
+    repo.register_command(L"Scheduler Commands", L"SCHEDULE INFO", nullptr, schedule_info_command, 1);
+    repo.register_command(L"Scheduler Commands", L"SCHEDULE SET", nullptr, schedule_set_command, 3);
 
-    repo.register_channel_command(L"Query Commands", L"TIME",  nullptr, time_command, 0);
+    repo.register_channel_command(L"Query Commands", L"TIME", nullptr, time_command, 0);
 }
 
 }}} // namespace caspar::protocol::amcp

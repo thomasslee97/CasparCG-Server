@@ -3107,7 +3107,7 @@ void amcp_command_repository_wrapper::register_command(std::wstring             
                         amcp_command_impl_func         command,
                         int                       min_num_params)
 {
-    auto func = [=](command_context_simple& ctx) {
+    auto func = [=](const command_context_simple& ctx) {
         auto ctx2 = ctx_->create(ctx);
         return command(ctx2);
     };
@@ -3121,7 +3121,7 @@ void amcp_command_repository_wrapper::register_channel_command(std::wstring     
                                 amcp_command_impl_func         command,
                                 int                       min_num_params)
 {
-    auto func = [=](command_context_simple& ctx) {
+    auto func = [=](const command_context_simple& ctx) {
         auto ctx2 = ctx_->create(ctx);
         return command(ctx2);
     };

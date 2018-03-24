@@ -45,6 +45,8 @@ class AMCPCommandScheduler
 
     std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode);
 
+    std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> find(const std::wstring& token);
+
     boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index);
 
   private:
