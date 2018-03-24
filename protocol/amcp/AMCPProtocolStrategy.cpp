@@ -88,12 +88,12 @@ class AMCPProtocolStrategy
         : repo_(repo)
         , scheduler_(scheduler)
     {
-        commandQueues_.push_back(spl::make_shared<AMCPCommandQueue>(L"General Queue for " + name));
+        commandQueues_.push_back(spl::make_shared<AMCPCommandQueue>(L"General Queue for " + name, repo_->channels()));
 
         int i = 0;
         for (const auto& ch : repo_->channels()) {
             auto queue = spl::make_shared<AMCPCommandQueue>(L"Channel " + boost::lexical_cast<std::wstring>(i + 1) +
-                                                            L" for " + name);
+                                                            L" for " + name, repo_->channels());
             scheduler_->add_channel(ch.channel->timecode());
             schedule_ops_.push_back(ch.channel->add_tick_listener([&, i, queue] {
                 const auto cmds = scheduler_->schedule(i);
@@ -201,8 +201,8 @@ class AMCPProtocolStrategy
                 return error_state::command_error;
             }
 
-            command_name                                   = boost::to_upper_copy(tokens.front());
-            const std::shared_ptr<AMCPCommandBase> command = repo_->parse_command(client, tokens, request_id);
+            command_name                               = boost::to_upper_copy(tokens.front());
+            const std::shared_ptr<AMCPCommand> command = repo_->parse_command(client, tokens, request_id);
             if (!command) {
                 return error_state::command_error;
             }
@@ -212,7 +212,8 @@ class AMCPProtocolStrategy
                 return error_state::access_error;
             }
 
-            commandQueues_.at(channel_index + 1)->AddCommand(command);
+            auto wrapped = std::make_shared<AMCPGroupCommand>(command);
+            commandQueues_.at(channel_index + 1)->AddCommand(std::move(wrapped));
             return error_state::no_error;
 
         } catch (std::out_of_range&) {

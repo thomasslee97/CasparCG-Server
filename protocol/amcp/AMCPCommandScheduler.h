@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "AMCPCommandBase.h"
+#include "AMCPCommand.h"
 
 #include <core/frame/frame_timecode.h>
 
@@ -34,10 +34,10 @@ class AMCPCommandScheduler
 
     void add_channel(std::shared_ptr<core::channel_timecode> channel_timecode);
 
-    void set(int                              channel_index,
-             const std::wstring&              token,
-             const core::frame_timecode&      timecode,
-             std::shared_ptr<AMCPCommandBase> command);
+    void set(int                          channel_index,
+             const std::wstring&          token,
+             const core::frame_timecode&  timecode,
+             std::shared_ptr<AMCPCommand> command);
 
     bool remove(const std::wstring& token);
 
@@ -45,7 +45,7 @@ class AMCPCommandScheduler
 
     std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode);
 
-    boost::optional<std::vector<std::shared_ptr<AMCPCommandBase>>> schedule(int channel_index);
+    boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index);
 
   private:
     struct Impl;

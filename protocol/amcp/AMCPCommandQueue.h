@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "AMCPCommandBase.h"
+#include "AMCPCommand.h"
 
 #include <common/executor.h>
 #include <common/memory.h>
@@ -33,13 +33,13 @@ class AMCPCommandQueue
   public:
     typedef spl::shared_ptr<AMCPCommandQueue> ptr_type;
 
-    AMCPCommandQueue(const std::wstring& name);
-    ~AMCPCommandQueue();
+    AMCPCommandQueue(const std::wstring& name, const std::vector<channel_context>& channels);
 
-    void AddCommand(std::shared_ptr<AMCPCommandBase> command);
+    void AddCommand(std::shared_ptr<AMCPGroupCommand> command);
 
   private:
-    executor executor_;
+    executor                            executor_;
+    const std::vector<channel_context>& channels_;
 };
 
 }}} // namespace caspar::protocol::amcp

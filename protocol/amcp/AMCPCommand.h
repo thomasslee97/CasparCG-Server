@@ -22,30 +22,11 @@
 #pragma once
 
 #include "../util/ClientInfo.h"
-#include "AMCPCommandBase.h"
 #include "amcp_shared.h"
-#include <core/consumer/frame_consumer.h>
-#include <core/producer/frame_producer.h>
-
-#include <core/producer/cg_proxy.h>
 
 namespace caspar { namespace protocol { namespace amcp {
-    
-void inline send_reply_inner(const IO::ClientInfoPtr client, const std::wstring& req_id, const std::wstring& str)
-{
-    if (str.empty())
-        return;
 
-    std::wstring reply = str;
-    if (!req_id.empty())
-        reply = L"RES " + req_id + L" " + str;
-
-    client->send(std::move(reply));
-}
-
-// TODO: AMCPCommandBase replace with AMCPCommand again? perhaps it will need an impl struct to make it work?
-
-class AMCPCommand : public AMCPCommandBase // TODO AMCPSubCommand
+class AMCPCommand
 {
   private:
     command_context_simple  ctx_;
@@ -69,92 +50,43 @@ class AMCPCommand : public AMCPCommandBase // TODO AMCPSubCommand
 
     typedef std::shared_ptr<AMCPCommand> ptr_type;
 
-    bool Execute() override
-    {
-        // TODO - dont reply if part of batch and no req_id
-        std::wstring res;
-        { // TODO - move lock to batched command only
-            if (ctx_.channel_index >= 0) {
-                //std::unique_lock<std::mutex> lock = ctx.channel.channel->stage().get_lock(); // TODO - reenable
-                res                               = command_(ctx_);
-            } else {
-                res = command_(ctx_);
-            }
-        }
+    void Execute(bool reply_without_req_id);
 
-        SendReply(res);
+    void SendReply(const std::wstring& str) const;
 
-        return true;
-    }
+    std::wstring name() const { return name_; }
 
-    void SendReply(const std::wstring& str) const override { send_reply_inner(ctx_.client, request_id_, str); }
-
-    IO::ClientInfoPtr client() const { return ctx_.client; }
-
-    std::wstring name() const override { return name_; }
-
-    int channel_index() const override { return ctx_.channel_index; }
+    int channel_index() const { return ctx_.channel_index; }
 };
 
-class AMCPBatchCommand : public AMCPCommandBase // TODO AMCPCommand
+class AMCPGroupCommand
 {
-    const std::vector<std::shared_ptr<AMCPCommandBase>> commands_;
-    const std::wstring                                  request_id_;
+    const std::vector<std::shared_ptr<AMCPCommand>> commands_;
+    const std::wstring                              request_id_;
+    const bool                                      is_batch_;
 
   public:
-    AMCPBatchCommand(const std::vector<std::shared_ptr<AMCPCommandBase>> commands, const std::wstring& request_id)
+    AMCPGroupCommand(const std::vector<std::shared_ptr<AMCPCommand>> commands, const std::wstring& request_id)
         : commands_(commands)
         , request_id_(request_id)
+        , is_batch_(true)
     {
         // TODO - needs a client, to send responses to, if needed. when scheduled, the response should be sent to the
         // child commands clients?
     }
 
-    bool Execute() override
+    AMCPGroupCommand(const std::shared_ptr<AMCPCommand> command)
+        : commands_({command})
+        , request_id_(L"")
+        , is_batch_(false)
     {
-        if (commands_.size() == 0) {
-            return false;
-        }
-
-        std::set<int> channels;
-        for (const auto cmd : commands_) {
-            channels.insert(cmd->channel_index());
-        }
-
-        /*
-        command_context ctx; // TODO where to get it from
-
-        // TODO - this will not work if a batch inside a batch
-        // TODO - this will not handle swap commands at all well
-        std::vector<std::unique_lock<std::mutex>> locks;
-        // This runs sequentially through channel indixes to remove chance of race conditions if multiple run at once
-        for (const int ch : channels) {
-            if (ch < 0)
-                continue;
-
-            locks.push_back(ctx.channels().at(ch).channel->stage().get_lock());
-        }*/
-
-        // TODO - guard against a recursive circle of commands (just in case)
-
-        for (auto cmd : commands_) {
-            cmd->Execute();
-        }
-
-        // TODO - send success reply if request id?
-
-        return true;
     }
 
-    void SendReply(const std::wstring& str) const override
-    {
-        // Already logged to console by AMCPCommandQueue
-        // TODO - send reply if has request id?
-    }
+    bool Execute(const std::vector<channel_context>& channels_ctx) const;
 
-    std::wstring name() const override { return L"BATCH"; } // TODO include count
+    void SendReply(const std::wstring& str) const;
 
-    int channel_index() const override { return -1; } // TODO remove or make useful for chaining
+    std::wstring name() const;
 };
 
 }}} // namespace caspar::protocol::amcp

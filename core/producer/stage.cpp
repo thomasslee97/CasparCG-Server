@@ -265,8 +265,7 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                 std::swap(tweens_, other_impl->tweens_);
         };
 
-        return executor_.begin_invoke([=] { other_impl->executor_.invoke(func, task_priority::high_priority); },
-                                      task_priority::high_priority);
+        return invoke_both(other, func);
     }
 
     std::future<void> swap_layer(int index, int other_index, bool swap_transforms)
@@ -307,9 +306,19 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                 }
             };
 
-            return executor_.begin_invoke([=] { other_impl->executor_.invoke(func, task_priority::high_priority); },
-                                          task_priority::high_priority);
+            return invoke_both(other, func);
         }
+    }
+
+    std::future<void> invoke_both(stage& other, std::function<void()> func)
+    {
+        auto other_impl = other.impl_;
+
+        if (other_impl->channel_index_ < channel_index_)
+            return other_impl->executor_.begin_invoke([=] { executor_.invoke(func, task_priority::high_priority); },
+                                                      task_priority::high_priority);
+        return executor_.begin_invoke([=] { other_impl->executor_.invoke(func, task_priority::high_priority); },
+                                      task_priority::high_priority);
     }
 
     void add_layer_consumer(void* token, int layer, const spl::shared_ptr<write_frame_consumer>& layer_consumer)

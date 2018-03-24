@@ -82,7 +82,7 @@ std::wstring schedule_set_command(command_context& ctx)
     }
 
     const std::list<std::wstring>    tokens(ctx.parameters.begin() + 2, ctx.parameters.end());
-    std::shared_ptr<AMCPCommandBase> command =
+    std::shared_ptr<AMCPCommand> command =
         ctx.static_context.parser->parse_command(ctx.client, tokens, schedule_token);
     if (!command) {
         return L"403 SCHEDULE SET ERROR\r\n";

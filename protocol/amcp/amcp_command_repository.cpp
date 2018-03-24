@@ -153,7 +153,7 @@ struct amcp_command_repository::impl
         return nullptr;
     }
 
-    std::shared_ptr<AMCPCommandBase> parse_command(IO::ClientInfoPtr       client,
+    std::shared_ptr<AMCPCommand> parse_command(IO::ClientInfoPtr       client,
                                                    std::list<std::wstring> tokens,
                                                    const std::wstring&     request_id) const
     {
@@ -206,7 +206,7 @@ amcp_command_repository::amcp_command_repository(
 
 const std::vector<channel_context>& amcp_command_repository::channels() const { return impl_->channels_; }
 
-std::shared_ptr<AMCPCommandBase> amcp_command_repository::parse_command(IO::ClientInfoPtr       client,
+std::shared_ptr<AMCPCommand> amcp_command_repository::parse_command(IO::ClientInfoPtr       client,
                                                                         std::list<std::wstring> tokens,
                                                                         const std::wstring&     request_id) const
 {

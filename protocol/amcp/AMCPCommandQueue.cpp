@@ -24,45 +24,16 @@
 #include "AMCPCommandQueue.h"
 
 #include <boost/lexical_cast.hpp>
-#include <common/except.h>
-#include <common/timer.h>
 
 namespace caspar { namespace protocol { namespace amcp {
 
-namespace {
-
-std::mutex& get_global_mutex()
-{
-    static std::mutex mutex;
-
-    return mutex;
-}
-
-std::map<std::wstring, AMCPCommandQueue*>& get_instances()
-{
-    static std::map<std::wstring, AMCPCommandQueue*> queues;
-
-    return queues;
-}
-
-} // namespace
-
-AMCPCommandQueue::AMCPCommandQueue(const std::wstring& name)
+AMCPCommandQueue::AMCPCommandQueue(const std::wstring& name, const std::vector<channel_context>& channels)
     : executor_(L"AMCPCommandQueue " + name)
+    , channels_(channels)
 {
-    std::lock_guard<std::mutex> lock(get_global_mutex());
-
-    get_instances().insert(std::make_pair(name, this));
 }
 
-AMCPCommandQueue::~AMCPCommandQueue()
-{
-    std::lock_guard<std::mutex> lock(get_global_mutex());
-
-    get_instances().erase(executor_.name());
-}
-
-void AMCPCommandQueue::AddCommand(std::shared_ptr<AMCPCommandBase> pCurrentCommand)
+void AMCPCommandQueue::AddCommand(std::shared_ptr<AMCPGroupCommand> pCurrentCommand)
 {
     if (!pCurrentCommand)
         return;
@@ -79,35 +50,7 @@ void AMCPCommandQueue::AddCommand(std::shared_ptr<AMCPCommandBase> pCurrentComma
 
     executor_.begin_invoke([=] {
         try {
-            try {
-                caspar::timer timer;
-
-                auto name = pCurrentCommand->name();
-                CASPAR_LOG(debug) << "Executing command: " << name;
-
-                pCurrentCommand->Execute();
-
-                CASPAR_LOG(debug) << "Executed command (" << timer.elapsed() << "s): " << name;
-
-            } catch (file_not_found&) {
-                CASPAR_LOG(error) << " Turn on log level debug for stacktrace.";
-                pCurrentCommand->SendReply(L"404 " + pCurrentCommand->name() + L" FAILED\r\n");
-            } catch (expected_user_error&) {
-                pCurrentCommand->SendReply(L"403 " + pCurrentCommand->name() + L" FAILED\r\n");
-            } catch (user_error&) {
-                CASPAR_LOG(error) << " Check syntax. Turn on log level debug for stacktrace.";
-                pCurrentCommand->SendReply(L"403 " + pCurrentCommand->name() + L" FAILED\r\n");
-            } catch (std::out_of_range&) {
-                CASPAR_LOG(error) << L"Missing parameter. Check syntax. Turn on log level debug for stacktrace.";
-                pCurrentCommand->SendReply(L"402 " + pCurrentCommand->name() + L" FAILED\r\n");
-            } catch (boost::bad_lexical_cast&) {
-                CASPAR_LOG(error) << L"Invalid parameter. Check syntax. Turn on log level debug for stacktrace.";
-                pCurrentCommand->SendReply(L"403 " + pCurrentCommand->name() + L" FAILED\r\n");
-            } catch (...) {
-                CASPAR_LOG_CURRENT_EXCEPTION();
-                CASPAR_LOG(error) << "Failed to execute command:" << pCurrentCommand->name();
-                pCurrentCommand->SendReply(L"501 " + pCurrentCommand->name() + L" FAILED\r\n");
-            }
+            pCurrentCommand->Execute(channels_);
 
             CASPAR_LOG(trace) << "Ready for a new command";
         } catch (...) {

@@ -2,6 +2,7 @@ cmake_minimum_required (VERSION 2.6)
 project (protocol)
 
 set(SOURCES
+		amcp/AMCPCommand.cpp
 		amcp/AMCPCommandQueue.cpp
 		amcp/AMCPCommandScheduler.cpp
 		amcp/AMCPCommandsImpl.cpp
@@ -32,7 +33,6 @@ set(SOURCES
 		StdAfx.cpp
 )
 set(HEADERS
-		amcp/AMCPCommandBase.h
 		amcp/AMCPCommand.h
 		amcp/AMCPCommandQueue.h
 		amcp/AMCPCommandScheduler.h

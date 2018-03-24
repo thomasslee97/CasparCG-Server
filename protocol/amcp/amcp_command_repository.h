@@ -38,7 +38,7 @@ class amcp_command_repository : boost::noncopyable
     amcp_command_repository(const std::vector<channel_context>&      channels,
                             const spl::shared_ptr<core::help_repository>&                 help_repo);
 
-    std::shared_ptr<AMCPCommandBase>
+    std::shared_ptr<AMCPCommand>
          parse_command(IO::ClientInfoPtr client, std::list<std::wstring> tokens, const std::wstring& request_id) const;
     bool check_channel_lock(IO::ClientInfoPtr client, int channel_index) const;
 

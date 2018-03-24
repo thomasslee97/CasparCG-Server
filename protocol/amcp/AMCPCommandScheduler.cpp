@@ -30,22 +30,17 @@ namespace caspar { namespace protocol { namespace amcp {
 class AMCPScheduledCommand
 {
   private:
-    core::frame_timecode                                     timecode_;
-    std::map<std::wstring, std::shared_ptr<AMCPCommandBase>> commands_{};
+    core::frame_timecode                                 timecode_;
+    std::map<std::wstring, std::shared_ptr<AMCPCommand>> commands_{};
 
   public:
-    AMCPScheduledCommand(const std::shared_ptr<AMCPCommandBase> command,
-                         core::frame_timecode                   timecode,
-                         std::wstring                           token)
+    AMCPScheduledCommand(const std::shared_ptr<AMCPCommand> command, core::frame_timecode timecode, std::wstring token)
         : timecode_(timecode)
     {
         commands_.insert({std::move(token), std::move(command)});
     }
 
-    void add(const std::wstring& token, std::shared_ptr<AMCPCommandBase> command)
-    {
-        commands_.insert({token, command});
-    }
+    void add(const std::wstring& token, std::shared_ptr<AMCPCommand> command) { commands_.insert({token, command}); }
 
     bool try_pop_token(const std::wstring& token)
     {
@@ -66,14 +61,14 @@ class AMCPScheduledCommand
         return timecode_ < now;
     }
 
-    std::shared_ptr<AMCPBatchCommand> create_command() const
+    std::shared_ptr<AMCPGroupCommand> create_command() const
     {
-        std::vector<std::shared_ptr<AMCPCommandBase>> cmds;
+        std::vector<std::shared_ptr<AMCPCommand>> cmds;
         for (const auto cmd : commands_) {
             cmds.push_back(cmd.second);
         }
 
-        return std::move(std::make_shared<AMCPBatchCommand>(cmds, L""));
+        return std::move(std::make_shared<AMCPGroupCommand>(cmds, L""));
     }
 
     std::vector<std::pair<core::frame_timecode, std::wstring>> get_tokens()
@@ -99,7 +94,7 @@ class AMCPCommandSchedulerQueue
     {
     }
 
-    void set(const std::wstring& token, const core::frame_timecode& timecode, std::shared_ptr<AMCPCommandBase> command)
+    void set(const std::wstring& token, const core::frame_timecode& timecode, std::shared_ptr<AMCPCommand> command)
     {
         if (!command || token.empty() || timecode == core::frame_timecode::get_default())
             return;
@@ -150,9 +145,9 @@ class AMCPCommandSchedulerQueue
         return res;
     }
 
-    std::vector<std::shared_ptr<AMCPCommandBase>> schedule()
+    std::vector<std::shared_ptr<AMCPGroupCommand>> schedule()
     {
-        std::vector<std::shared_ptr<AMCPCommandBase>> res;
+        std::vector<std::shared_ptr<AMCPGroupCommand>> res;
         const core::frame_timecode                    now = channel_timecode_->timecode();
 
         // TODO - optimise once queue type has changed
@@ -192,7 +187,7 @@ struct AMCPCommandScheduler::Impl
     void set(int                              channel_index,
              const std::wstring&              token,
              const core::frame_timecode&      timecode,
-             std::shared_ptr<AMCPCommandBase> command)
+             std::shared_ptr<AMCPCommand> command)
     {
         std::lock_guard<std::timed_mutex> lock(lock_);
 
@@ -259,7 +254,7 @@ struct AMCPCommandScheduler::Impl
         bool is_locked() const { return locked_; }
     };
 
-    boost::optional<std::vector<std::shared_ptr<AMCPCommandBase>>> schedule(int channel_index)
+    boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index)
     {
         // TODO - tweak this timeout
         timeout_lock lock(lock_, 5);
@@ -284,7 +279,7 @@ void AMCPCommandScheduler::add_channel(std::shared_ptr<core::channel_timecode> c
 void AMCPCommandScheduler::set(int                              channel_index,
                                const std::wstring&              token,
                                const core::frame_timecode&      timecode,
-                               std::shared_ptr<AMCPCommandBase> command)
+                               std::shared_ptr<AMCPCommand> command)
 {
     impl_->set(channel_index, token, timecode, command);
 }
@@ -298,7 +293,7 @@ std::vector<std::pair<core::frame_timecode, std::wstring>> AMCPCommandScheduler:
     return impl_->list(timecode);
 }
 
-boost::optional<std::vector<std::shared_ptr<AMCPCommandBase>>> AMCPCommandScheduler::schedule(int channel_index)
+boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> AMCPCommandScheduler::schedule(int channel_index)
 {
     return impl_->schedule(channel_index);
 }
