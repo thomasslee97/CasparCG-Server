@@ -105,6 +105,7 @@ class AMCPCommandSchedulerQueue
                 continue;
 
             cmd->add(token, command);
+            return;
         }
 
         // No match, so queue command instead
