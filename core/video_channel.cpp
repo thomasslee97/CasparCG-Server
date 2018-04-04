@@ -84,7 +84,7 @@ struct video_channel::impl final
 
         mutable tbb::spin_mutex                            timecode_listeners_mutex_;
         int64_t                                            last_timecode_listener_id = 0;
-        std::unordered_map<int64_t, std::function<void()>> timecode_listeners_;
+        std::unordered_map<int64_t, std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)>> timecode_listeners_;
 
         executor											executor_				{ L"video_channel " + boost::lexical_cast<std::wstring>(index_) };
 public:
@@ -103,6 +103,7 @@ public:
       , stage_(index, graph_)
   {
       graph_->set_color("tick-time", caspar::diagnostics::color(0.0f, 0.6f, 0.9f));
+	  graph_->set_color("skipped-schedule", caspar::diagnostics::color(0.3f, 0.6f, 0.6f));
       graph_->set_text(print());
       caspar::diagnostics::register_graph(graph_);
 
@@ -177,7 +178,7 @@ public:
 
             for (auto listener : listeners) {
                 try {
-                    listener.second();
+                    listener.second(graph_);
                 } catch (...) {
                     CASPAR_LOG_CURRENT_EXCEPTION();
                 }
@@ -291,7 +292,7 @@ public:
 		});
         }
 
-        std::shared_ptr<void> add_timecode_listener(std::function<void()> listener)
+        std::shared_ptr<void> add_timecode_listener(std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)> listener)
         {
             return lock(timecode_listeners_mutex_, [&] {
                 auto listener_id = last_timecode_listener_id++;
@@ -329,7 +330,7 @@ std::shared_ptr<void>        video_channel::add_tick_listener(std::function<void
 {
     return impl_->add_tick_listener(std::move(listener));
 }
-std::shared_ptr<void> video_channel::add_timecode_listener(std::function<void()> listener)
+std::shared_ptr<void> video_channel::add_timecode_listener(std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)> listener)
 {
     return impl_->add_timecode_listener(std::move(listener));
 }

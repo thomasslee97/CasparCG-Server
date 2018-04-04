@@ -27,6 +27,7 @@
 #include "fwd.h"
 
 #include "monitor/monitor.h"
+#include <common/diagnostics/graph.h>
 
 #include <boost/property_tree/ptree_fwd.hpp>
 
@@ -70,7 +71,7 @@ class video_channel final
     void                       audio_channel_layout(const core::audio_channel_layout& channel_layout);
 
     std::shared_ptr<void> add_tick_listener(std::function<void()> listener);
-    std::shared_ptr<void> add_timecode_listener(std::function<void()> listener);
+    std::shared_ptr<void> add_timecode_listener(std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)> listener);
 
     spl::shared_ptr<core::frame_factory> frame_factory();
 

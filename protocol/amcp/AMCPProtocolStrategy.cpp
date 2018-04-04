@@ -34,6 +34,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/log/keywords/delimiter.hpp>
 
+#include <common/diagnostics/graph.h>
+
 #include "amcp_command_context.h"
 #include "protocol/util/strategy_adapters.h"
 
@@ -107,9 +109,10 @@ class AMCPProtocolStrategy
             auto queue = spl::make_shared<AMCPCommandQueue>(
                 L"Channel " + boost::lexical_cast<std::wstring>(i + 1) + L" for " + name, repo_->channels());
             scheduler_->add_channel(ch.channel->timecode());
-            schedule_ops_.push_back(ch.channel->add_timecode_listener([&, i, queue] {
+            schedule_ops_.push_back(ch.channel->add_timecode_listener([&, i, queue](spl::shared_ptr<caspar::diagnostics::graph> graph) {
                 const auto cmds = scheduler_->schedule(i);
                 if (!cmds) {
+					graph->set_tag(caspar::diagnostics::tag_severity::WARNING, "skipped-schedule");
                     // TODO - report failed to lock to diag
                     return;
                 }
