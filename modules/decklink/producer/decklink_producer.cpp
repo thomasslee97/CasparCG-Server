@@ -253,8 +253,8 @@ class decklink_producer
 
                 BSTR str;
                 if (SUCCEEDED(tc->GetString(&str))) {
-                    std::wstring ws(str, SysStringLen(str));
-                    CASPAR_LOG(info) << "Timecode: " << ws;
+                    //std::wstring ws(str, SysStringLen(str));
+                    //CASPAR_LOG(info) << "Timecode: " << ws;
                 }
 
                 tc->Release();
@@ -495,10 +495,6 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
     auto get_source_framerate = [=] { return producer->get_out_framerate(); };
     auto target_framerate     = dependencies.format_desc.framerate;
 
-    return core::create_destroy_proxy(core::create_framerate_producer(producer,
-                                                                      get_source_framerate,
-                                                                      target_framerate,
-                                                                      dependencies.format_desc.field_mode,
-                                                                      dependencies.format_desc.audio_cadence));
+	return core::create_destroy_proxy(producer);
 }
 }} // namespace caspar::decklink

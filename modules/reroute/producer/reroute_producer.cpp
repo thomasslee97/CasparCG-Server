@@ -99,7 +99,6 @@ spl::shared_ptr<core::frame_producer> create_producer(
 	params2.erase(params2.begin());
 
 	auto frames_delay			= get_param(L"FRAMES_DELAY", params2, 0);
-	bool no_auto_deinterlace	= contains_param(L"NO_AUTO_DEINTERLACE", params2);
 
 	if (has_layer_spec)
 	{
@@ -109,7 +108,7 @@ spl::shared_ptr<core::frame_producer> create_producer(
 	}
 	else
 	{
-		return create_channel_producer(dependencies, *found_channel, frames_delay, no_auto_deinterlace);
+		return create_channel_producer(dependencies, *found_channel, frames_delay);
 	}
 }
 

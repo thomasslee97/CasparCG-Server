@@ -244,8 +244,7 @@ public:
 	explicit channel_producer(
 			const core::frame_producer_dependencies& dependecies,
 			const spl::shared_ptr<core::video_channel>& channel,
-			int frames_delay,
-			bool no_auto_deinterlace)
+			int frames_delay)
 		: frame_factory_(dependecies.frame_factory)
 		, output_format_desc_(dependecies.format_desc)
 		, consumer_(spl::make_shared<channel_consumer>(frames_delay))
@@ -253,11 +252,11 @@ public:
 				channel->video_format_desc().framerate,
 				{ ffmpeg::create_input_pad(channel->video_format_desc(), channel->audio_channel_layout().num_channels) },
 				dependecies.frame_factory,
-				no_auto_deinterlace ? channel->video_format_desc() : get_progressive_format(channel->video_format_desc()),
+				channel->video_format_desc(),
 				channel->audio_channel_layout(),
 				L"",
 				false,
-				!no_auto_deinterlace)
+				false)
 	{
 		pixel_constraints_.width.set(output_format_desc_.width);
 		pixel_constraints_.height.set(output_format_desc_.height);
@@ -347,17 +346,11 @@ public:
 spl::shared_ptr<core::frame_producer> create_channel_producer(
 		const core::frame_producer_dependencies& dependencies,
 		const spl::shared_ptr<core::video_channel>& channel,
-		int frames_delay,
-		bool no_auto_deinterlace)
+		int frames_delay)
 {
-	auto producer = spl::make_shared<channel_producer>(dependencies, channel, frames_delay, no_auto_deinterlace);
+	auto producer = spl::make_shared<channel_producer>(dependencies, channel, frames_delay);
 
-	return core::create_framerate_producer(
-			producer,
-			[producer] { return producer->current_framerate(); },
-			dependencies.format_desc.framerate,
-			dependencies.format_desc.field_mode,
-			dependencies.format_desc.audio_cadence);
+	return producer;
 }
 
 }}

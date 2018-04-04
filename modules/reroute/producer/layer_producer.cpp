@@ -261,12 +261,7 @@ spl::shared_ptr<core::frame_producer> create_layer_producer(
 {
 	auto producer = spl::make_shared<layer_producer>(channel, layer, frames_delay);
 
-	return core::create_framerate_producer(
-			producer,
-			std::bind(&layer_producer::current_framerate, producer),
-			destination_mode.framerate,
-			destination_mode.field_mode,
-			destination_mode.audio_cadence);
+	return producer;
 }
 
 }}
