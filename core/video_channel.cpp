@@ -333,6 +333,6 @@ std::shared_ptr<void> video_channel::add_timecode_listener(std::function<void()>
 {
     return impl_->add_timecode_listener(std::move(listener));
 }
-const std::shared_ptr<core::channel_timecode> video_channel::timecode() const { return impl_->timecode_; }
+std::shared_ptr<core::channel_timecode> video_channel::timecode() const { return impl_->timecode_; }
 
 }}

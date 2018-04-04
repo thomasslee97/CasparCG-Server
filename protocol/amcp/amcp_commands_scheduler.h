@@ -25,6 +25,6 @@
 
 namespace caspar { namespace protocol { namespace amcp {
 
-void register_scheduler_commands(amcp_command_repository_wrapper& repo);
+void register_scheduler_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo);
 
 }}} // namespace caspar::protocol::amcp

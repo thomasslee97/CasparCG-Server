@@ -78,7 +78,7 @@ class video_channel final
     boost::property_tree::wptree delay_info() const;
     int                          index() const;
 
-    const std::shared_ptr<core::channel_timecode> timecode() const;
+    std::shared_ptr<core::channel_timecode> timecode() const;
 
   private:
     struct impl;

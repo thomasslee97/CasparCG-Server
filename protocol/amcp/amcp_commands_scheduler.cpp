@@ -38,7 +38,7 @@ std::wstring time_command(command_context& ctx)
 std::wstring schedule_remove_command(command_context& ctx)
 {
     const std::wstring token = ctx.parameters.at(0);
-    if (!ctx.static_context.scheduler->remove(token)) {
+    if (!ctx.static_context->scheduler->remove(token)) {
         return L"403 SCHEDULE REMOVE ERROR\r\n";
     }
 
@@ -47,7 +47,7 @@ std::wstring schedule_remove_command(command_context& ctx)
 
 std::wstring schedule_clear_command(command_context& ctx)
 {
-    ctx.static_context.scheduler->clear();
+    ctx.static_context->scheduler->clear();
     return L"202 SCHEDULE CLEAR OK\r\n";
 }
 
@@ -61,7 +61,7 @@ std::wstring schedule_list_command(command_context& ctx)
     std::wstringstream replyString;
     replyString << L"200 SCHEDULE LIST OK\r\n";
 
-    for (auto entry : ctx.static_context.scheduler->list(timecode)) {
+    for (auto entry : ctx.static_context->scheduler->list(timecode)) {
         replyString << entry.first.string() << L" " << entry.second << "\r\n";
     }
 
@@ -72,7 +72,7 @@ std::wstring schedule_list_command(command_context& ctx)
 std::wstring schedule_info_command(command_context& ctx)
 {
     const auto token    = ctx.parameters.at(0);
-    const auto info = ctx.static_context.scheduler->find(token);
+    const auto info = ctx.static_context->scheduler->find(token);
 
     if (info.first == core::frame_timecode::get_default() || !info.second) {
         return L"403 SCHEDULE INFO ERROR\r\n";
@@ -98,13 +98,13 @@ std::wstring schedule_set_command(command_context& ctx)
     }
 
     const std::list<std::wstring> tokens(ctx.parameters.begin() + 2, ctx.parameters.end());
-    std::shared_ptr<AMCPCommand> command = ctx.static_context.parser->parse_command(ctx.client, tokens, schedule_token);
+    std::shared_ptr<AMCPCommand> command = ctx.static_context->parser->parse_command(ctx.client, tokens, schedule_token);
     if (!command) {
         return L"403 SCHEDULE SET ERROR\r\n";
     }
 
     const int channel_index = command->channel_index();
-    if (!ctx.static_context.parser->check_channel_lock(ctx.client, channel_index)) {
+    if (!ctx.static_context->parser->check_channel_lock(ctx.client, channel_index)) {
         return L"503 SCHEDULE SET FAILED\r\n";
     }
 
@@ -117,20 +117,20 @@ std::wstring schedule_set_command(command_context& ctx)
     // if (schedule_timecode_relative)
     //     schedule_timecode += result.queue->channel_timecode()->timecode();
 
-    ctx.static_context.scheduler->set(channel_index, std::move(schedule_token), schedule_timecode, std::move(command));
+    ctx.static_context->scheduler->set(channel_index, std::move(schedule_token), schedule_timecode, std::move(command));
 
     return L"202 SCHEDULE SET OK\r\n";
 }
 
-void register_scheduler_commands(amcp_command_repository_wrapper& repo)
+void register_scheduler_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
 {
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE REMOVE", nullptr, schedule_remove_command, 1);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE CLEAR", nullptr, schedule_clear_command, 0);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE LIST", nullptr, schedule_list_command, 0);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE INFO", nullptr, schedule_info_command, 1);
-    repo.register_command(L"Scheduler Commands", L"SCHEDULE SET", nullptr, schedule_set_command, 3);
+    repo->register_command(L"Scheduler Commands", L"SCHEDULE REMOVE", nullptr, schedule_remove_command, 1);
+    repo->register_command(L"Scheduler Commands", L"SCHEDULE CLEAR", nullptr, schedule_clear_command, 0);
+    repo->register_command(L"Scheduler Commands", L"SCHEDULE LIST", nullptr, schedule_list_command, 0);
+    repo->register_command(L"Scheduler Commands", L"SCHEDULE INFO", nullptr, schedule_info_command, 1);
+    repo->register_command(L"Scheduler Commands", L"SCHEDULE SET", nullptr, schedule_set_command, 3);
 
-    repo.register_channel_command(L"Query Commands", L"TIME", nullptr, time_command, 0);
+    repo->register_channel_command(L"Query Commands", L"TIME", nullptr, time_command, 0);
 }
 
 }}} // namespace caspar::protocol::amcp

@@ -54,7 +54,7 @@ struct amcp_command_static_context
 
 struct command_context
 {
-    const amcp_command_static_context static_context;
+    std::shared_ptr<amcp_command_static_context> static_context;
     const IO::ClientInfoPtr           client;
     const channel_context             channel;
     const int                         channel_index;
@@ -63,12 +63,12 @@ struct command_context
 
     int layer_index(int default_ = 0) const { return layer_id == -1 ? default_ : layer_id; }
 
-    command_context(const amcp_command_static_context& static_context,
-                    IO::ClientInfoPtr                  client,
-                    channel_context                    channel,
-                    int                                channel_index,
-                    int                                layer_id)
-        : static_context(std::move(static_context))
+    command_context(std::shared_ptr<amcp_command_static_context> static_context,
+                    IO::ClientInfoPtr client,
+                    channel_context   channel,
+                    int               channel_index,
+                    int               layer_id)
+        : static_context(static_context)
         , client(std::move(client))
         , channel(channel)
         , channel_index(channel_index)
@@ -76,7 +76,7 @@ struct command_context
     {
     }
 
-    std::vector<channel_context> channels() const { return static_context.channels; }
+    std::vector<channel_context> channels() const { return static_context->channels; }
 };
 
 }}} // namespace caspar::protocol::amcp

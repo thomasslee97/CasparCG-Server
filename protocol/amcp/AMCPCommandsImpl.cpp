@@ -296,7 +296,7 @@ std::wstring ListTemplates(const spl::shared_ptr<core::cg_producer_registry>& cg
 
 std::vector<spl::shared_ptr<core::video_channel>> get_channels(const command_context& ctx)
 {
-    return cpplinq::from(ctx.static_context.channels)
+    return cpplinq::from(ctx.static_context->channels)
         .select([](channel_context c) { return spl::make_shared_ptr(c.channel); })
         .to_vector();
 }
@@ -307,8 +307,8 @@ core::frame_producer_dependencies get_producer_dependencies(const std::shared_pt
     return core::frame_producer_dependencies(channel->frame_factory(),
                                              get_channels(ctx),
                                              channel->video_format_desc(),
-                                             ctx.static_context.producer_registry,
-                                             ctx.static_context.cg_registry);
+                                             ctx.static_context->producer_registry,
+                                             ctx.static_context->cg_registry);
 }
 
 // Basic Commands
@@ -408,7 +408,7 @@ std::wstring loadbg_command(command_context& ctx)
 
     auto channel = ctx.channel.channel;
     auto pFP =
-        ctx.static_context.producer_registry->create_producer(get_producer_dependencies(channel, ctx), ctx.parameters);
+        ctx.static_context->producer_registry->create_producer(get_producer_dependencies(channel, ctx), ctx.parameters);
 
     if (pFP == frame_producer::empty())
         CASPAR_THROW_EXCEPTION(file_not_found() << msg_info(ctx.parameters.size() > 0 ? ctx.parameters[0] : L""));
@@ -442,7 +442,7 @@ std::wstring load_command(command_context& ctx)
     core::diagnostics::scoped_call_context save;
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
     core::diagnostics::call_context::for_thread().layer         = ctx.layer_index();
-    auto pFP                                                    = ctx.static_context.producer_registry->create_producer(
+    auto pFP                                                    = ctx.static_context->producer_registry->create_producer(
         get_producer_dependencies(ctx.channel.channel, ctx), ctx.parameters);
     ctx.channel.channel->stage().load(ctx.layer_index(), pFP, true);
 
@@ -612,7 +612,7 @@ std::wstring swap_command(command_context& ctx)
         boost::split(strs, ctx.parameters[0], boost::is_any_of("-"));
 
         auto ch1 = ctx.channel.channel;
-        auto ch2 = ctx.static_context.channels.at(boost::lexical_cast<int>(strs.at(0)) - 1);
+        auto ch2 = ctx.static_context->channels.at(boost::lexical_cast<int>(strs.at(0)) - 1);
 
         int l1 = ctx.layer_index();
         int l2 = boost::lexical_cast<int>(strs.at(1));
@@ -620,7 +620,7 @@ std::wstring swap_command(command_context& ctx)
         ch1->stage().swap_layer(l1, l2, ch2.channel->stage(), swap_transforms);
     } else {
         auto ch1 = ctx.channel.channel;
-        auto ch2 = ctx.static_context.channels.at(boost::lexical_cast<int>(ctx.parameters[0]) - 1);
+        auto ch2 = ctx.static_context->channels.at(boost::lexical_cast<int>(ctx.parameters[0]) - 1);
         ch1->stage().swap_layers(ch2.channel->stage(), swap_transforms);
     }
 
@@ -672,7 +672,7 @@ std::wstring add_command(command_context& ctx)
     core::diagnostics::scoped_call_context save;
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
 
-    auto consumer = ctx.static_context.consumer_registry->create_consumer(
+    auto consumer = ctx.static_context->consumer_registry->create_consumer(
         ctx.parameters, &ctx.channel.channel->stage(), get_channels(ctx));
     ctx.channel.channel->output().add(ctx.layer_index(consumer->index()), consumer);
 
@@ -706,7 +706,7 @@ std::wstring remove_command(command_context& ctx)
     if (index == std::numeric_limits<int>::min()) {
         replace_placeholders(L"<CLIENT_IP_ADDRESS>", ctx.client->address(), ctx.parameters);
 
-        index = ctx.static_context.consumer_registry
+        index = ctx.static_context->consumer_registry
                     ->create_consumer(ctx.parameters, &ctx.channel.channel->stage(), get_channels(ctx))
                     ->index();
     }
@@ -732,7 +732,7 @@ void print_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring print_command(command_context& ctx)
 {
-    ctx.channel.channel->output().add(ctx.static_context.consumer_registry->create_consumer(
+    ctx.channel.channel->output().add(ctx.static_context->consumer_registry->create_consumer(
         {L"IMAGE"}, &ctx.channel.channel->stage(), get_channels(ctx)));
 
     return L"202 PRINT OK\r\n";
@@ -1027,7 +1027,7 @@ std::wstring cg_add_command(command_context& ctx)
 
     auto filename = ctx.parameters.at(1);
     auto proxy =
-        ctx.static_context.cg_registry->get_or_create_proxy(spl::make_shared_ptr(ctx.channel.channel),
+        ctx.static_context->cg_registry->get_or_create_proxy(spl::make_shared_ptr(ctx.channel.channel),
                                                             get_producer_dependencies(ctx.channel.channel, ctx),
                                                             ctx.layer_index(core::cg_proxy::DEFAULT_LAYER),
                                                             filename);
@@ -1052,7 +1052,7 @@ void cg_play_describer(core::help_sink& sink, const core::help_repository& repo)
 std::wstring cg_play_command(command_context& ctx)
 {
     int layer = boost::lexical_cast<int>(ctx.parameters.at(0));
-    ctx.static_context.cg_registry
+    ctx.static_context->cg_registry
         ->get_proxy(spl::make_shared_ptr(ctx.channel.channel), ctx.layer_index(core::cg_proxy::DEFAULT_LAYER))
         ->play(layer);
 
@@ -1061,7 +1061,7 @@ std::wstring cg_play_command(command_context& ctx)
 
 spl::shared_ptr<core::cg_proxy> get_expected_cg_proxy(command_context& ctx)
 {
-    auto proxy = ctx.static_context.cg_registry->get_proxy(spl::make_shared_ptr(ctx.channel.channel),
+    auto proxy = ctx.static_context->cg_registry->get_proxy(spl::make_shared_ptr(ctx.channel.channel),
                                                            ctx.layer_index(core::cg_proxy::DEFAULT_LAYER));
 
     if (proxy == cg_proxy::empty())
@@ -2225,10 +2225,10 @@ void channel_grid_describer(core::help_sink& sink, const core::help_repository& 
 std::wstring channel_grid_command(command_context& ctx)
 {
     int  index = 1;
-    auto self  = ctx.static_context.channels.back();
+    auto self  = ctx.static_context->channels.back();
 
     core::diagnostics::scoped_call_context save;
-    core::diagnostics::call_context::for_thread().video_channel = ctx.static_context.channels.size();
+    core::diagnostics::call_context::for_thread().video_channel = ctx.static_context->channels.size();
 
     std::vector<std::wstring> params;
     params.push_back(L"SCREEN");
@@ -2236,14 +2236,14 @@ std::wstring channel_grid_command(command_context& ctx)
     params.push_back(L"NAME");
     params.push_back(L"Channel Grid Window");
     auto screen =
-        ctx.static_context.consumer_registry->create_consumer(params, &self.channel->stage(), get_channels(ctx));
+        ctx.static_context->consumer_registry->create_consumer(params, &self.channel->stage(), get_channels(ctx));
 
     self.channel->output().add(screen);
 
-    for (auto& channel : ctx.static_context.channels) {
+    for (auto& channel : ctx.static_context->channels) {
         if (channel.channel != self.channel) {
             core::diagnostics::call_context::for_thread().layer = index;
-            auto producer                                       = ctx.static_context.producer_registry->create_producer(
+            auto producer                                       = ctx.static_context->producer_registry->create_producer(
                 get_producer_dependencies(self.channel, ctx),
                 L"route://" + boost::lexical_cast<std::wstring>(channel.channel->index()) + L" NO_AUTO_DEINTERLACE");
             self.channel->stage().load(index, producer, false);
@@ -2252,7 +2252,7 @@ std::wstring channel_grid_command(command_context& ctx)
         }
     }
 
-    auto num_channels       = ctx.static_context.channels.size() - 1;
+    auto num_channels       = ctx.static_context->channels.size() - 1;
     int  square_side_length = std::ceil(std::sqrt(num_channels));
 
     auto ctx2 = command_context(ctx.static_context, ctx.client, self, self.channel->index(), ctx.layer_id);
@@ -2361,8 +2361,8 @@ void thumbnail_generate_describer(core::help_sink& sink, const core::help_reposi
 
 std::wstring thumbnail_generate_command(command_context& ctx)
 {
-    if (ctx.static_context.thumb_gen) {
-        ctx.static_context.thumb_gen->generate(ctx.parameters.at(0));
+    if (ctx.static_context->thumb_gen) {
+        ctx.static_context->thumb_gen->generate(ctx.parameters.at(0));
         return L"202 THUMBNAIL GENERATE OK\r\n";
     } else
         CASPAR_THROW_EXCEPTION(not_supported() << msg_info(L"Thumbnail generation turned off"));
@@ -2377,8 +2377,8 @@ void thumbnail_generateall_describer(core::help_sink& sink, const core::help_rep
 
 std::wstring thumbnail_generateall_command(command_context& ctx)
 {
-    if (ctx.static_context.thumb_gen) {
-        ctx.static_context.thumb_gen->generate_all();
+    if (ctx.static_context->thumb_gen) {
+        ctx.static_context->thumb_gen->generate_all();
         return L"202 THUMBNAIL GENERATE_ALL OK\r\n";
     } else
         CASPAR_THROW_EXCEPTION(not_supported() << msg_info(L"Thumbnail generation turned off"));
@@ -2401,7 +2401,7 @@ std::wstring cinf_command(command_context& ctx)
         auto path = itr->path();
         auto file = path.stem().wstring();
         if (boost::iequals(file, ctx.parameters.at(0)))
-            info += MediaInfo(itr->path(), ctx.static_context.media_info_repo);
+            info += MediaInfo(itr->path(), ctx.static_context->media_info_repo);
     }
 
     if (info.empty())
@@ -2441,7 +2441,7 @@ std::wstring cls_command(command_context& ctx)
 
     std::wstringstream replyString;
     replyString << L"200 CLS OK\r\n";
-    replyString << ListMedia(ctx.static_context.media_info_repo, sub_directory);
+    replyString << ListMedia(ctx.static_context->media_info_repo, sub_directory);
     replyString << L"\r\n";
     return boost::to_upper_copy(replyString.str());
 }
@@ -2503,7 +2503,7 @@ std::wstring tls_command(command_context& ctx)
     std::wstringstream replyString;
     replyString << L"200 TLS OK\r\n";
 
-    replyString << ListTemplates(ctx.static_context.cg_registry, sub_directory);
+    replyString << ListTemplates(ctx.static_context->cg_registry, sub_directory);
     replyString << L"\r\n";
 
     return replyString.str();
@@ -2535,7 +2535,7 @@ void version_describer(core::help_sink& sink, const core::help_repository& repo)
 std::wstring version_command(command_context& ctx)
 {
     if (!ctx.parameters.empty() && !boost::iequals(ctx.parameters.at(0), L"SERVER")) {
-        auto version = ctx.static_context.system_info_provider_repo->get_version(ctx.parameters.at(0));
+        auto version = ctx.static_context->system_info_provider_repo->get_version(ctx.parameters.at(0));
 
         return L"201 VERSION OK\r\n" + version + L"\r\n";
     }
@@ -2559,8 +2559,8 @@ std::wstring info_command(command_context& ctx)
     std::wstringstream replyString;
     // This is needed for backwards compatibility with old clients
     replyString << L"200 INFO OK\r\n";
-    for (size_t n = 0; n < ctx.static_context.channels.size(); ++n)
-        replyString << n + 1 << L" " << ctx.static_context.channels.at(n).channel->video_format_desc().name
+    for (size_t n = 0; n < ctx.static_context->channels.size(); ++n)
+        replyString << n + 1 << L" " << ctx.static_context->channels.at(n).channel->video_format_desc().name
                     << L" PLAYING\r\n";
     replyString << L"\r\n";
     return replyString.str();
@@ -2622,7 +2622,7 @@ std::wstring info_template_command(command_context& ctx)
     auto filename = ctx.parameters.at(0);
 
     std::wstringstream str;
-    str << u16(ctx.static_context.cg_registry->read_meta_info(filename));
+    str << u16(ctx.static_context->cg_registry->read_meta_info(filename));
     boost::property_tree::wptree info;
     boost::property_tree::xml_parser::read_xml(
         str, info, boost::property_tree::xml_parser::trim_whitespace | boost::property_tree::xml_parser::no_comments);
@@ -2679,7 +2679,7 @@ std::wstring info_system_command(command_context& ctx)
     info.add(L"system.os.description", caspar::os_description());
     info.add(L"system.cpu", caspar::cpu_info());
 
-    ctx.static_context.system_info_provider_repo->fill_information(info);
+    ctx.static_context->system_info_provider_repo->fill_information(info);
 
     return create_info_xml_reply(info, L"SYSTEM");
 }
@@ -2696,7 +2696,7 @@ std::wstring info_server_command(command_context& ctx)
     boost::property_tree::wptree info;
 
     int index = 0;
-    for (auto& channel : ctx.static_context.channels)
+    for (auto& channel : ctx.static_context->channels)
         info.add_child(L"channels.channel", channel.channel->info()).add(L"index", ++index);
 
     return create_info_xml_reply(info, L"SERVER");
@@ -2766,7 +2766,7 @@ void gl_info_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring gl_info_command(command_context& ctx)
 {
-    auto device = ctx.static_context.ogl_device;
+    auto device = ctx.static_context->ogl_device;
 
     if (!device)
         CASPAR_THROW_EXCEPTION(not_supported() << msg_info("GL command only supported with OpenGL accelerator."));
@@ -2793,7 +2793,7 @@ void gl_gc_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring gl_gc_command(command_context& ctx)
 {
-    auto device = ctx.static_context.ogl_device;
+    auto device = ctx.static_context->ogl_device;
 
     if (!device)
         CASPAR_THROW_EXCEPTION(not_supported() << msg_info("GL command only supported with OpenGL accelerator."));
@@ -2914,10 +2914,10 @@ std::wstring create_help_list(const std::wstring& help_command, const command_co
     std::wstringstream result;
     result << L"200 " << help_command << L" OK\r\n";
     max_width_sink width;
-    ctx.static_context.help_repo->help(tags, width);
+    ctx.static_context->help_repo->help(tags, width);
     short_description_sink sink(width.max_width, result);
     sink.width = width.max_width;
-    ctx.static_context.help_repo->help(tags, sink);
+    ctx.static_context->help_repo->help(tags, sink);
     result << L"\r\n";
     return result.str();
 }
@@ -2929,7 +2929,7 @@ create_help_details(const std::wstring& help_command, const command_context& ctx
     result << L"201 " << help_command << L" OK\r\n";
     auto                  joined = boost::join(ctx.parameters, L" ");
     long_description_sink sink(result);
-    ctx.static_context.help_repo->help(tags, joined, sink);
+    ctx.static_context->help_repo->help(tags, joined, sink);
     result << L"\r\n";
     return result.str();
 }
@@ -3011,7 +3011,7 @@ void kill_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring kill_command(command_context& ctx)
 {
-    ctx.static_context.shutdown_server_now.set_value(false); // false for not attempting to restart
+    ctx.static_context->shutdown_server_now.set_value(false); // false for not attempting to restart
     return L"202 KILL OK\r\n";
 }
 
@@ -3027,7 +3027,7 @@ void restart_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring restart_command(command_context& ctx)
 {
-    ctx.static_context.shutdown_server_now.set_value(true); // true for attempting to restart
+    ctx.static_context->shutdown_server_now.set_value(true); // true for attempting to restart
     return L"202 RESTART OK\r\n";
 }
 
@@ -3045,7 +3045,7 @@ void lock_describer(core::help_sink& sink, const core::help_repository& repo)
 std::wstring lock_command(command_context& ctx)
 {
     int  channel_index = boost::lexical_cast<int>(ctx.parameters.at(0)) - 1;
-    auto lock          = ctx.static_context.channels.at(channel_index).lock;
+    auto lock          = ctx.static_context->channels.at(channel_index).lock;
     auto command       = boost::to_upper_copy(ctx.parameters.at(1));
 
     if (command == L"ACQUIRE") {
@@ -3107,12 +3107,13 @@ void amcp_command_repository_wrapper::register_command(std::wstring             
                         amcp_command_impl_func         command,
                         int                       min_num_params)
 {
-    auto func = [=](const command_context_simple& ctx) {
-        auto ctx2 = ctx_->create(ctx);
+	std::shared_ptr<command_context_factory> ctx3 = ctx_;
+    auto func = [ctx3, command](const command_context_simple& ctx) {
+        auto ctx2 = ctx3->create(ctx);
         return command(ctx2);
     };
 
-    repo_.register_command(category, name, describer, func, min_num_params);
+    repo_->register_command(category, name, describer, func, min_num_params);
 }
 
 void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
@@ -3121,125 +3122,123 @@ void amcp_command_repository_wrapper::register_channel_command(std::wstring     
                                 amcp_command_impl_func         command,
                                 int                       min_num_params)
 {
-    auto func = [=](const command_context_simple& ctx) {
-        auto ctx2 = ctx_->create(ctx);
+	std::shared_ptr<command_context_factory> ctx3 = ctx_;
+	auto func = [ctx3, command](const command_context_simple& ctx) {
+        auto ctx2 = ctx3->create(ctx);
         return command(ctx2);
     };
 
-    repo_.register_channel_command(category, name, describer, func, min_num_params);
+    repo_->register_channel_command(category, name, describer, func, min_num_params);
 }
 
-spl::shared_ptr<core::help_repository> amcp_command_repository_wrapper::help_repo() const { return repo_.help_repo(); }
+spl::shared_ptr<core::help_repository> amcp_command_repository_wrapper::help_repo() const { return repo_->help_repo(); }
 
-
-void register_commands(amcp_command_repository& repo2, std::shared_ptr<command_context_factory>& ctx)
+void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
 {
-    amcp_command_repository_wrapper repo(repo2, ctx);
+    repo->register_channel_command(L"Basic Commands", L"LOADBG", loadbg_describer, loadbg_command, 1);
+    repo->register_channel_command(L"Basic Commands", L"LOAD", load_describer, load_command, 1);
+    repo->register_channel_command(L"Basic Commands", L"PLAY", play_describer, play_command, 0);
+    repo->register_channel_command(L"Basic Commands", L"PAUSE", pause_describer, pause_command, 0);
+    repo->register_channel_command(L"Basic Commands", L"RESUME", resume_describer, resume_command, 0);
+    repo->register_channel_command(L"Basic Commands", L"STOP", stop_describer, stop_command, 0);
+    repo->register_channel_command(L"Basic Commands", L"CLEAR", clear_describer, clear_command, 0);
+    repo->register_channel_command(L"Basic Commands", L"CALL", call_describer, call_command, 1);
+    repo->register_channel_command(L"Basic Commands", L"SWAP", swap_describer, swap_command, 1);
+    repo->register_channel_command(L"Basic Commands", L"ADD", add_describer, add_command, 1);
+    repo->register_channel_command(L"Basic Commands", L"REMOVE", remove_describer, remove_command, 0);
+    repo->register_channel_command(L"Basic Commands", L"PRINT", print_describer, print_command, 0);
+    repo->register_command(L"Basic Commands", L"LOG LEVEL", log_level_describer, log_level_command, 1);
+    repo->register_command(L"Basic Commands", L"LOG CATEGORY", log_category_describer, log_category_command, 2);
+    repo->register_channel_command(L"Basic Commands", L"SET", set_describer, set_command, 2);
+    repo->register_command(L"Basic Commands", L"LOCK", lock_describer, lock_command, 2);
 
-    repo.register_channel_command(L"Basic Commands", L"LOADBG", loadbg_describer, loadbg_command, 1);
-    repo.register_channel_command(L"Basic Commands", L"LOAD", load_describer, load_command, 1);
-    repo.register_channel_command(L"Basic Commands", L"PLAY", play_describer, play_command, 0);
-    repo.register_channel_command(L"Basic Commands", L"PAUSE", pause_describer, pause_command, 0);
-    repo.register_channel_command(L"Basic Commands", L"RESUME", resume_describer, resume_command, 0);
-    repo.register_channel_command(L"Basic Commands", L"STOP", stop_describer, stop_command, 0);
-    repo.register_channel_command(L"Basic Commands", L"CLEAR", clear_describer, clear_command, 0);
-    repo.register_channel_command(L"Basic Commands", L"CALL", call_describer, call_command, 1);
-    repo.register_channel_command(L"Basic Commands", L"SWAP", swap_describer, swap_command, 1);
-    repo.register_channel_command(L"Basic Commands", L"ADD", add_describer, add_command, 1);
-    repo.register_channel_command(L"Basic Commands", L"REMOVE", remove_describer, remove_command, 0);
-    repo.register_channel_command(L"Basic Commands", L"PRINT", print_describer, print_command, 0);
-    repo.register_command(L"Basic Commands", L"LOG LEVEL", log_level_describer, log_level_command, 1);
-    repo.register_command(L"Basic Commands", L"LOG CATEGORY", log_category_describer, log_category_command, 2);
-    repo.register_channel_command(L"Basic Commands", L"SET", set_describer, set_command, 2);
-    repo.register_command(L"Basic Commands", L"LOCK", lock_describer, lock_command, 2);
+    repo->register_command(L"Data Commands", L"DATA STORE", data_store_describer, data_store_command, 2);
+    repo->register_command(L"Data Commands", L"DATA RETRIEVE", data_retrieve_describer, data_retrieve_command, 1);
+    repo->register_command(L"Data Commands", L"DATA LIST", data_list_describer, data_list_command, 0);
+    repo->register_command(L"Data Commands", L"DATA REMOVE", data_remove_describer, data_remove_command, 1);
 
-    repo.register_command(L"Data Commands", L"DATA STORE", data_store_describer, data_store_command, 2);
-    repo.register_command(L"Data Commands", L"DATA RETRIEVE", data_retrieve_describer, data_retrieve_command, 1);
-    repo.register_command(L"Data Commands", L"DATA LIST", data_list_describer, data_list_command, 0);
-    repo.register_command(L"Data Commands", L"DATA REMOVE", data_remove_describer, data_remove_command, 1);
+    repo->register_channel_command(L"Template Commands", L"CG ADD", cg_add_describer, cg_add_command, 3);
+    repo->register_channel_command(L"Template Commands", L"CG PLAY", cg_play_describer, cg_play_command, 1);
+    repo->register_channel_command(L"Template Commands", L"CG STOP", cg_stop_describer, cg_stop_command, 1);
+    repo->register_channel_command(L"Template Commands", L"CG NEXT", cg_next_describer, cg_next_command, 1);
+    repo->register_channel_command(L"Template Commands", L"CG REMOVE", cg_remove_describer, cg_remove_command, 1);
+    repo->register_channel_command(L"Template Commands", L"CG CLEAR", cg_clear_describer, cg_clear_command, 0);
+    repo->register_channel_command(L"Template Commands", L"CG UPDATE", cg_update_describer, cg_update_command, 2);
+    repo->register_channel_command(L"Template Commands", L"CG INVOKE", cg_invoke_describer, cg_invoke_command, 2);
+    repo->register_channel_command(L"Template Commands", L"CG INFO", cg_info_describer, cg_info_command, 0);
 
-    repo.register_channel_command(L"Template Commands", L"CG ADD", cg_add_describer, cg_add_command, 3);
-    repo.register_channel_command(L"Template Commands", L"CG PLAY", cg_play_describer, cg_play_command, 1);
-    repo.register_channel_command(L"Template Commands", L"CG STOP", cg_stop_describer, cg_stop_command, 1);
-    repo.register_channel_command(L"Template Commands", L"CG NEXT", cg_next_describer, cg_next_command, 1);
-    repo.register_channel_command(L"Template Commands", L"CG REMOVE", cg_remove_describer, cg_remove_command, 1);
-    repo.register_channel_command(L"Template Commands", L"CG CLEAR", cg_clear_describer, cg_clear_command, 0);
-    repo.register_channel_command(L"Template Commands", L"CG UPDATE", cg_update_describer, cg_update_command, 2);
-    repo.register_channel_command(L"Template Commands", L"CG INVOKE", cg_invoke_describer, cg_invoke_command, 2);
-    repo.register_channel_command(L"Template Commands", L"CG INFO", cg_info_describer, cg_info_command, 0);
-
-    repo.register_channel_command(L"Mixer Commands", L"MIXER KEYER", mixer_keyer_describer, mixer_keyer_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER CHROMA", mixer_chroma_describer, mixer_chroma_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER BLEND", mixer_blend_describer, mixer_blend_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(L"Mixer Commands", L"MIXER KEYER", mixer_keyer_describer, mixer_keyer_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER CHROMA", mixer_chroma_describer, mixer_chroma_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER BLEND", mixer_blend_describer, mixer_blend_command, 0);
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER OPACITY", mixer_opacity_describer, mixer_opacity_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER BRIGHTNESS", mixer_brightness_describer, mixer_brightness_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER SATURATION", mixer_saturation_describer, mixer_saturation_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER CONTRAST", mixer_contrast_describer, mixer_contrast_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER LEVELS", mixer_levels_describer, mixer_levels_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER FILL", mixer_fill_describer, mixer_fill_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER CLIP", mixer_clip_describer, mixer_clip_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER ANCHOR", mixer_anchor_describer, mixer_anchor_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER CROP", mixer_crop_describer, mixer_crop_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(L"Mixer Commands", L"MIXER LEVELS", mixer_levels_describer, mixer_levels_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER FILL", mixer_fill_describer, mixer_fill_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER CLIP", mixer_clip_describer, mixer_clip_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER ANCHOR", mixer_anchor_describer, mixer_anchor_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER CROP", mixer_crop_describer, mixer_crop_command, 0);
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER ROTATION", mixer_rotation_describer, mixer_rotation_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER PERSPECTIVE", mixer_perspective_describer, mixer_perspective_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER MIPMAP", mixer_mipmap_describer, mixer_mipmap_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER VOLUME", mixer_volume_describer, mixer_volume_command, 0);
-    repo.register_channel_command(
+    repo->register_channel_command(L"Mixer Commands", L"MIXER MIPMAP", mixer_mipmap_describer, mixer_mipmap_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER VOLUME", mixer_volume_describer, mixer_volume_command, 0);
+    repo->register_channel_command(
         L"Mixer Commands", L"MIXER MASTERVOLUME", mixer_mastervolume_describer, mixer_mastervolume_command, 0);
-    repo.register_channel_command(L"Mixer Commands",
+    repo->register_channel_command(L"Mixer Commands",
                                   L"MIXER STRAIGHT_ALPHA_OUTPUT",
                                   mixer_straight_alpha_describer,
                                   mixer_straight_alpha_command,
                                   0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER GRID", mixer_grid_describer, mixer_grid_command, 1);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER COMMIT", mixer_commit_describer, mixer_commit_command, 0);
-    repo.register_channel_command(L"Mixer Commands", L"MIXER CLEAR", mixer_clear_describer, mixer_clear_command, 0);
-    repo.register_command(L"Mixer Commands", L"CHANNEL_GRID", channel_grid_describer, channel_grid_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER GRID", mixer_grid_describer, mixer_grid_command, 1);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER COMMIT", mixer_commit_describer, mixer_commit_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER CLEAR", mixer_clear_describer, mixer_clear_command, 0);
+    repo->register_command(L"Mixer Commands", L"CHANNEL_GRID", channel_grid_describer, channel_grid_command, 0);
 
-    repo.register_command(
+    repo->register_command(
         L"Thumbnail Commands", L"THUMBNAIL LIST", thumbnail_list_describer, thumbnail_list_command, 0);
-    repo.register_command(
+    repo->register_command(
         L"Thumbnail Commands", L"THUMBNAIL RETRIEVE", thumbnail_retrieve_describer, thumbnail_retrieve_command, 1);
-    repo.register_command(
+    repo->register_command(
         L"Thumbnail Commands", L"THUMBNAIL GENERATE", thumbnail_generate_describer, thumbnail_generate_command, 1);
-    repo.register_command(L"Thumbnail Commands",
+    repo->register_command(L"Thumbnail Commands",
                           L"THUMBNAIL GENERATE_ALL",
                           thumbnail_generateall_describer,
                           thumbnail_generateall_command,
                           0);
 
-    repo.register_command(L"Query Commands", L"CINF", cinf_describer, cinf_command, 1);
-    repo.register_command(L"Query Commands", L"CLS", cls_describer, cls_command, 0);
-    repo.register_command(L"Query Commands", L"FLS", fls_describer, fls_command, 0);
-    repo.register_command(L"Query Commands", L"TLS", tls_describer, tls_command, 0);
-    repo.register_command(L"Query Commands", L"VERSION", version_describer, version_command, 0);
-    repo.register_command(L"Query Commands", L"INFO", info_describer, info_command, 0);
-    repo.register_channel_command(L"Query Commands", L"INFO", info_channel_describer, info_channel_command, 0);
-    repo.register_command(L"Query Commands", L"INFO TEMPLATE", info_template_describer, info_template_command, 1);
-    repo.register_command(L"Query Commands", L"INFO CONFIG", info_config_describer, info_config_command, 0);
-    repo.register_command(L"Query Commands", L"INFO PATHS", info_paths_describer, info_paths_command, 0);
-    repo.register_command(L"Query Commands", L"INFO SYSTEM", info_system_describer, info_system_command, 0);
-    repo.register_command(L"Query Commands", L"INFO SERVER", info_server_describer, info_server_command, 0);
-    repo.register_command(L"Query Commands", L"INFO THREADS", info_threads_describer, info_threads_command, 0);
-    repo.register_channel_command(L"Query Commands", L"INFO DELAY", info_delay_describer, info_delay_command, 0);
-    repo.register_command(L"Query Commands", L"DIAG", diag_describer, diag_command, 0);
-    // repo.register_command(L"Query Commands", L"GL INFO", gl_info_describer, gl_info_command, 0);
-    // repo.register_command(L"Query Commands", L"GL GC", gl_gc_describer, gl_gc_command, 0);
-    repo.register_command(L"Query Commands", L"BYE", bye_describer, bye_command, 0);
-    repo.register_command(L"Query Commands", L"KILL", kill_describer, kill_command, 0);
-    repo.register_command(L"Query Commands", L"RESTART", restart_describer, restart_command, 0);
-    repo.register_command(L"Query Commands", L"HELP", help_describer, help_command, 0);
-    repo.register_command(L"Query Commands", L"HELP PRODUCER", help_producer_describer, help_producer_command, 0);
-    repo.register_command(L"Query Commands", L"HELP CONSUMER", help_consumer_describer, help_consumer_command, 0);
+    repo->register_command(L"Query Commands", L"CINF", cinf_describer, cinf_command, 1);
+    repo->register_command(L"Query Commands", L"CLS", cls_describer, cls_command, 0);
+    repo->register_command(L"Query Commands", L"FLS", fls_describer, fls_command, 0);
+    repo->register_command(L"Query Commands", L"TLS", tls_describer, tls_command, 0);
+    repo->register_command(L"Query Commands", L"VERSION", version_describer, version_command, 0);
+    repo->register_command(L"Query Commands", L"INFO", info_describer, info_command, 0);
+    repo->register_channel_command(L"Query Commands", L"INFO", info_channel_describer, info_channel_command, 0);
+    repo->register_command(L"Query Commands", L"INFO TEMPLATE", info_template_describer, info_template_command, 1);
+    repo->register_command(L"Query Commands", L"INFO CONFIG", info_config_describer, info_config_command, 0);
+    repo->register_command(L"Query Commands", L"INFO PATHS", info_paths_describer, info_paths_command, 0);
+    repo->register_command(L"Query Commands", L"INFO SYSTEM", info_system_describer, info_system_command, 0);
+    repo->register_command(L"Query Commands", L"INFO SERVER", info_server_describer, info_server_command, 0);
+    repo->register_command(L"Query Commands", L"INFO THREADS", info_threads_describer, info_threads_command, 0);
+    repo->register_channel_command(L"Query Commands", L"INFO DELAY", info_delay_describer, info_delay_command, 0);
+    repo->register_command(L"Query Commands", L"DIAG", diag_describer, diag_command, 0);
+    // repo->register_command(L"Query Commands", L"GL INFO", gl_info_describer, gl_info_command, 0);
+    // repo->register_command(L"Query Commands", L"GL GC", gl_gc_describer, gl_gc_command, 0);
+    repo->register_command(L"Query Commands", L"BYE", bye_describer, bye_command, 0);
+    repo->register_command(L"Query Commands", L"KILL", kill_describer, kill_command, 0);
+    repo->register_command(L"Query Commands", L"RESTART", restart_describer, restart_command, 0);
+    repo->register_command(L"Query Commands", L"HELP", help_describer, help_command, 0);
+    repo->register_command(L"Query Commands", L"HELP PRODUCER", help_producer_describer, help_producer_command, 0);
+    repo->register_command(L"Query Commands", L"HELP CONSUMER", help_consumer_describer, help_consumer_command, 0);
 
-    repo.help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"REQ", req_describer);
-    repo.help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"PING", ping_describer);
+  //  repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"REQ", req_describer);
+//    repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"PING", ping_describer);
 
     register_scheduler_commands(repo);
 }

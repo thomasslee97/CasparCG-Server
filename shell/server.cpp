@@ -128,6 +128,7 @@ struct server::impl : boost::noncopyable
     accelerator::accelerator                           accelerator_;
     spl::shared_ptr<help_repository>                   help_repo_;
     std::shared_ptr<amcp::amcp_command_repository>     amcp_command_repo_;
+    std::shared_ptr<amcp::amcp_command_repository_wrapper>     amcp_command_repo_wrapper_;
     std::shared_ptr<amcp::command_context_factory>     amcp_context_factory_;
     std::shared_ptr<amcp::AMCPCommandScheduler>        amcp_command_scheduler_;
     std::vector<spl::shared_ptr<IO::AsyncEventServer>> async_servers_;
@@ -202,6 +203,7 @@ struct server::impl : boost::noncopyable
         io_service_.reset();
         osc_client_.reset();
         thumbnail_generator_.reset();
+        amcp_command_repo_wrapper_.reset();
         amcp_command_repo_.reset();
         amcp_context_factory_.reset();
         amcp_command_scheduler_.reset();
@@ -384,32 +386,35 @@ struct server::impl : boost::noncopyable
             ++index;
         }
 
-        return res;
+        return std::move(res);
     }
 
     void setup_controllers(const boost::property_tree::wptree& pt)
     {
         amcp_command_scheduler_ = std::make_shared<amcp::AMCPCommandScheduler>();
 
-        auto channels = build_channel_contexts(channels_);
+        amcp_command_repo_ =
+            std::make_shared<amcp::amcp_command_repository>(std::move(build_channel_contexts(channels_)), help_repo_);
 
-        amcp_command_repo_ = spl::make_shared<amcp::amcp_command_repository>(channels, help_repo_);
+        auto ctx = std::make_shared<amcp::amcp_command_static_context>(std::move(build_channel_contexts(channels_)),
+                                                                       thumbnail_generator_,
+                                                                       media_info_repo_,
+                                                                       system_info_provider_repo_,
+                                                                       cg_registry_,
+                                                                       help_repo_,
+                                                                       producer_registry_,
+                                                                       consumer_registry_,
+                                                                       spl::make_shared_ptr(amcp_command_scheduler_),
+                                                                       amcp_command_repo_,
+                                                                       accelerator_.get_ogl_device(),
+                                                                       shutdown_server_now_);
 
-        amcp_context_factory_ = std::make_shared<amcp::command_context_factory>(
-            amcp::amcp_command_static_context(channels,
-                                              thumbnail_generator_,
-                                              media_info_repo_,
-                                              system_info_provider_repo_,
-                                              cg_registry_,
-                                              help_repo_,
-                                              producer_registry_,
-                                              consumer_registry_,
-                                              spl::make_shared_ptr(amcp_command_scheduler_),
-                                              amcp_command_repo_,
-                                              accelerator_.get_ogl_device(),
-                                              shutdown_server_now_));
+        amcp_context_factory_ = std::make_shared<amcp::command_context_factory>(std::move(ctx));
 
-        amcp::register_commands(*amcp_command_repo_, amcp_context_factory_);
+        amcp_command_repo_wrapper_ =
+            std::make_shared<amcp::amcp_command_repository_wrapper>(amcp_command_repo_, amcp_context_factory_);
+
+        amcp::register_commands(amcp_command_repo_wrapper_);
 
         using boost::property_tree::wptree;
         for (auto& xml_controller : pt | witerate_children(L"configuration.controllers") | welement_context_iteration) {

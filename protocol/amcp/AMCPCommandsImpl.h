@@ -32,28 +32,29 @@ typedef std::function<std::wstring(command_context& args)> amcp_command_impl_fun
 class command_context_factory
 {
   public:
-    command_context_factory(const amcp_command_static_context static_context)
-        : static_context_(static_context)
+    command_context_factory(std::shared_ptr<amcp_command_static_context> static_context)
+        : static_context_(std::move(static_context))
     {
     }
 
     command_context create(const command_context_simple& ctx2) const
     {
         const channel_context channel =
-            ctx2.channel_index >= 0 ? static_context_.channels.at(ctx2.channel_index) : channel_context();
+            ctx2.channel_index >= 0 ? static_context_->channels.at(ctx2.channel_index) : channel_context();
         auto ctx       = command_context(static_context_, ctx2.client, channel, ctx2.channel_index, ctx2.layer_id);
-        ctx.parameters = ctx2.parameters;
-        return ctx;
+        ctx.parameters = std::move(ctx2.parameters);
+        return std::move(ctx);
     }
 
   private:
-    const amcp_command_static_context static_context_;
+    std::shared_ptr<amcp_command_static_context> static_context_;
 };
 
 class amcp_command_repository_wrapper
 {
   public:
-    amcp_command_repository_wrapper(class amcp_command_repository& repo, std::shared_ptr<command_context_factory> ctx)
+    amcp_command_repository_wrapper(std::shared_ptr<amcp_command_repository> repo,
+                                    std::shared_ptr<command_context_factory> ctx)
         : repo_(repo)
         , ctx_(ctx)
     {
@@ -74,10 +75,10 @@ class amcp_command_repository_wrapper
     spl::shared_ptr<core::help_repository> help_repo() const;
 
   private:
-    class amcp_command_repository&            repo_;
+    std::shared_ptr<amcp_command_repository>& repo_;
     std::shared_ptr<command_context_factory>& ctx_;
 };
 
-void register_commands(class amcp_command_repository& repo, std::shared_ptr<command_context_factory>& ctx);
+void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo);
 
 }}} // namespace caspar::protocol::amcp
