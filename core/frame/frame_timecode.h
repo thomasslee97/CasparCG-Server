@@ -77,7 +77,14 @@ class channel_timecode
     }
 
     void           tick();
-    frame_timecode timecode() const { return timecode_; };
+    frame_timecode timecode() const { return timecode_; }
+    void           timecode(frame_timecode& tc)
+    { 
+        if (is_free())
+            timecode_ = tc;
+    }
+
+    bool is_free() const { return true; } // TODO indicates whether locked to a source eg decklink
 
   private:
     frame_timecode timecode_;

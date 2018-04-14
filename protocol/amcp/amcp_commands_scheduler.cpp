@@ -28,9 +28,23 @@ namespace caspar { namespace protocol { namespace amcp {
 
 std::wstring time_command(command_context& ctx)
 {
+    const auto ch = ctx.channel.raw_channel->timecode();
+
+    if (ctx.parameters.size() > 0) 
+    {
+        if (!ch->is_free())
+            return L"4xx TIME FAILED\r\n";
+
+        core::frame_timecode tc;
+        if (!core::frame_timecode::parse_string(ctx.parameters.at(0), tc))
+            return L"4xx TIME FAILED\r\n";
+
+        ch->timecode(tc);
+    }
+
     std::wstringstream replyString;
     replyString << L"201 TIME OK\r\n";
-    replyString << ctx.channel.raw_channel->timecode()->timecode().string();
+    replyString << ch->timecode().string();
     replyString << L"\r\n";
     return replyString.str();
 }
@@ -89,8 +103,6 @@ std::wstring schedule_set_command(command_context& ctx)
 {
     std::wstring schedule_token = ctx.parameters.at(0);
 
-    // TODO - how to do relative timecode? it looks like the channels will not be available from here (timecode type may
-    // not be either?)
     core::frame_timecode schedule_timecode = core::frame_timecode::get_default();
     if (!core::frame_timecode::parse_string(ctx.parameters.at(1), schedule_timecode) ||
         /*!schedule_timecode.is_valid() ||*/ schedule_timecode == core::frame_timecode::get_default()) {
@@ -112,10 +124,6 @@ std::wstring schedule_set_command(command_context& ctx)
         // Only channel commands can be scheduled
         return L"503 SCHEDULE SET FAILED\r\n";
     }
-
-    // TODO
-    // if (schedule_timecode_relative)
-    //     schedule_timecode += result.queue->channel_timecode()->timecode();
 
     ctx.static_context->scheduler->set(channel_index, std::move(schedule_token), schedule_timecode, std::move(command));
 
