@@ -92,7 +92,7 @@ bool frame_timecode::parse_string(const std::wstring& str, frame_timecode& res)
         const uint8_t frames  = static_cast<uint8_t>(std::stoi(strs[3]));
 
         // TODO fps
-        res = core::frame_timecode(hours, minutes, seconds, frames, 50);
+        res = core::frame_timecode(hours, minutes, seconds, frames, 25);
         return true;
     } catch (...) {
         return false;
@@ -166,7 +166,7 @@ bool frame_timecode::operator==(const frame_timecode& other) const
 
 frame_timecode validate(const frame_timecode& timecode, int delta)
 {
-    const uint8_t fps = 50; // TODO dynamic
+    const uint8_t fps = 25; // TODO dynamic
 
     int frames        = timecode.frames() + delta;
     int delta_seconds = frames / fps;

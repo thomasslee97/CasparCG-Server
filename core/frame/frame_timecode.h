@@ -25,9 +25,6 @@
 
 namespace caspar { namespace core {
 
-// TODO - move timecode bits to seperate file
-
-// TODO - make immutable
 struct frame_timecode
 {
     frame_timecode();

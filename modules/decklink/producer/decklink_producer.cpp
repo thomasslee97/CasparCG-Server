@@ -248,7 +248,7 @@ class decklink_producer
                 // TODO - read flags from tc too
                 if (SUCCEEDED(tc->GetComponents(&hours, &minutes, &seconds, &frames))) {
                     //                    CASPAR_LOG(info) << "Got timecode";
-                    timecode = core::frame_timecode(hours, minutes, seconds, frames, 50); // TODO - fps from in_format_desc_
+                    timecode = core::frame_timecode(hours, minutes, seconds, frames, 25); // TODO - fps from in_format_desc_
                 }
 
                 BSTR str;
