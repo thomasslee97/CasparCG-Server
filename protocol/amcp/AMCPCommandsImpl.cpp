@@ -567,9 +567,9 @@ void call_describer(core::help_sink& sink, const core::help_repository& repo)
     sink.example(L">> CALL 1-2 SEEK 25");
 }
 
-std::wstring call_command(command_context& ctx)
+std::future<std::wstring> call_command(command_context& ctx)
 {
-    auto result = ctx.channel.stage->call(ctx.layer_index(), ctx.parameters).get(); // TODO - this could deadlock if run in a batch
+    const auto result = ctx.channel.stage->call(ctx.layer_index(), ctx.parameters).share();
 
     // TODO: because of std::async deferred timed waiting does not work
 
@@ -577,13 +577,17 @@ std::wstring call_command(command_context& ctx)
     if (wait_res == std::future_status::timeout)
     CASPAR_THROW_EXCEPTION(timed_out());*/
 
-    std::wstringstream replyString;
-    if (result.empty())
-        replyString << L"202 CALL OK\r\n";
-    else
-        replyString << L"201 CALL OK\r\n" << result << L"\r\n";
+    return std::async(std::launch::deferred, [result]() -> std::wstring {
+        std::wstring res = result.get();
 
-    return replyString.str();
+        std::wstringstream replyString;
+        if (res.empty())
+            replyString << L"202 CALL OK\r\n";
+        else
+            replyString << L"201 CALL OK\r\n" << res << L"\r\n";
+
+        return replyString.str();
+    });
 }
 
 void swap_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1217,17 +1221,21 @@ std::wstring cg_info_command(command_context& ctx)
 
 // Mixer Commands
 
-core::frame_transform get_current_transform(command_context& ctx)
+std::future<core::frame_transform> get_current_transform(command_context& ctx)
 {
-    return ctx.channel.stage->get_current_transform(ctx.layer_index()).get(); // TODO - this could deadlcok ina batch?
+    return ctx.channel.stage->get_current_transform(ctx.layer_index());
 }
 
 template <typename Func>
-std::wstring reply_value(command_context& ctx, const Func& extractor)
+std::future<std::wstring> reply_value(command_context& ctx, const Func& extractor)
 {
-    auto value = extractor(get_current_transform(ctx));
+    auto transform = get_current_transform(ctx).share();
 
-    return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(value) + L"\r\n";
+    return std::async(std::launch::deferred, [transform, extractor]() -> std::wstring {
+        auto value  = extractor(transform.get());
+
+        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(value) + L"\r\n";
+    });
 }
 
 class transforms_applier
@@ -1250,11 +1258,14 @@ class transforms_applier
 
     void add(stage::transform_tuple_t&& transform) { transforms_.push_back(std::move(transform)); }
 
-    void commit_deferred()
+    std::future<void> commit_deferred()
     {
-        auto& transforms = deferred_transforms_[ctx_.channel_index];
-        ctx_.channel.stage->apply_transforms(transforms).get(); // TODO - deadlock while batch?
-        transforms.clear();
+        const auto f = ctx_.channel.stage->apply_transforms(deferred_transforms_[ctx_.channel_index]).share();
+
+        return std::async(std::launch::deferred, [=]() {
+            f.get();
+            deferred_transforms_[ctx_.channel_index].clear();
+        });
     }
 
     void apply()
@@ -1291,7 +1302,7 @@ void mixer_keyer_describer(core::help_sink& sink, const core::help_repository& r
                  L"to retrieve the current state");
 }
 
-std::wstring mixer_keyer_command(command_context& ctx)
+std::future<std::wstring> mixer_keyer_command(command_context& ctx)
 {
     if (ctx.parameters.empty())
         return reply_value(ctx, [](const frame_transform& t) { return t.image_transform.is_key ? 1 : 0; });
@@ -1307,7 +1318,7 @@ std::wstring mixer_keyer_command(command_context& ctx)
                                             tweener(L"linear")));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 std::wstring ANIMATION_SYNTAX = L" {[duration:int] {[tween:string]|linear}|0 linear}}";
@@ -1358,19 +1369,23 @@ void mixer_chroma_describer(core::help_sink& sink, const core::help_repository& 
     sink.example(L">> MIXER 1-1 CHROMA none");
 }
 
-std::wstring mixer_chroma_command(command_context& ctx)
+std::future<std::wstring> mixer_chroma_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto chroma = get_current_transform(ctx).image_transform.chroma;
-        return L"201 MIXER OK\r\n" + std::wstring(chroma.enable ? L"1 " : L"0 ") +
-               boost::lexical_cast<std::wstring>(chroma.target_hue) + L" " +
-               boost::lexical_cast<std::wstring>(chroma.hue_width) + L" " +
-               boost::lexical_cast<std::wstring>(chroma.min_saturation) + L" " +
-               boost::lexical_cast<std::wstring>(chroma.min_brightness) + L" " +
-               boost::lexical_cast<std::wstring>(chroma.softness) + L" " +
-               boost::lexical_cast<std::wstring>(chroma.spill_suppress) + L" " +
-               boost::lexical_cast<std::wstring>(chroma.spill_suppress_saturation) + L" " +
-               std::wstring(chroma.show_mask ? L"1" : L"0") + L"\r\n";
+        auto chroma2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [chroma2]() -> std::wstring {
+            auto chroma = chroma2.get().image_transform.chroma;
+            return L"201 MIXER OK\r\n" + std::wstring(chroma.enable ? L"1 " : L"0 ") +
+                   boost::lexical_cast<std::wstring>(chroma.target_hue) + L" " +
+                   boost::lexical_cast<std::wstring>(chroma.hue_width) + L" " +
+                   boost::lexical_cast<std::wstring>(chroma.min_saturation) + L" " +
+                   boost::lexical_cast<std::wstring>(chroma.min_brightness) + L" " +
+                   boost::lexical_cast<std::wstring>(chroma.softness) + L" " +
+                   boost::lexical_cast<std::wstring>(chroma.spill_suppress) + L" " +
+                   boost::lexical_cast<std::wstring>(chroma.spill_suppress_saturation) + L" " +
+                   std::wstring(chroma.show_mask ? L"1" : L"0") + L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -1429,7 +1444,7 @@ std::wstring mixer_chroma_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_blend_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1460,7 +1475,7 @@ void mixer_blend_describer(core::help_sink& sink, const core::help_repository& r
     sink.para()->text(L"See ")->see(L"Blend Modes")->text(L" for supported values for ")->code(L"blend")->text(L".");
 }
 
-std::wstring mixer_blend_command(command_context& ctx)
+std::future<std::wstring> mixer_blend_command(command_context& ctx)
 {
     if (ctx.parameters.empty())
         return reply_value(ctx, [](const frame_transform& t) { return get_blend_mode(t.image_transform.blend_mode); });
@@ -1476,11 +1491,11 @@ std::wstring mixer_blend_command(command_context& ctx)
                                             tweener(L"linear")));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 template <typename Getter, typename Setter>
-std::wstring single_double_animatable_mixer_command(command_context& ctx, const Getter& getter, const Setter& setter)
+std::future<std::wstring> single_double_animatable_mixer_command(command_context& ctx, const Getter& getter, const Setter& setter)
 {
     if (ctx.parameters.empty())
         return reply_value(ctx, getter);
@@ -1499,7 +1514,7 @@ std::wstring single_double_animatable_mixer_command(command_context& ctx, const 
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_opacity_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1516,7 +1531,7 @@ void mixer_opacity_describer(core::help_sink& sink, const core::help_repository&
                  L"to retrieve the current opacity");
 }
 
-std::wstring mixer_opacity_command(command_context& ctx)
+std::future<std::wstring> mixer_opacity_command(command_context& ctx)
 {
     return single_double_animatable_mixer_command(
         ctx,
@@ -1538,7 +1553,7 @@ void mixer_brightness_describer(core::help_sink& sink, const core::help_reposito
                  L"to retrieve the current brightness");
 }
 
-std::wstring mixer_brightness_command(command_context& ctx)
+std::future<std::wstring> mixer_brightness_command(command_context& ctx)
 {
     return single_double_animatable_mixer_command(
         ctx,
@@ -1560,7 +1575,7 @@ void mixer_saturation_describer(core::help_sink& sink, const core::help_reposito
                  L"to retrieve the current saturation");
 }
 
-std::wstring mixer_saturation_command(command_context& ctx)
+std::future<std::wstring> mixer_saturation_command(command_context& ctx)
 {
     return single_double_animatable_mixer_command(
         ctx,
@@ -1582,7 +1597,7 @@ void mixer_contrast_describer(core::help_sink& sink, const core::help_repository
                  L"to retrieve the current contrast");
 }
 
-std::wstring mixer_contrast_command(command_context& ctx)
+std::future<std::wstring> mixer_contrast_command(command_context& ctx)
 {
     return single_double_animatable_mixer_command(
         ctx,
@@ -1615,15 +1630,19 @@ void mixer_levels_describer(core::help_sink& sink, const core::help_repository& 
                  L"for retrieving the current levels");
 }
 
-std::wstring mixer_levels_command(command_context& ctx)
+std::future<std::wstring> mixer_levels_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto levels = get_current_transform(ctx).image_transform.levels;
-        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(levels.min_input) + L" " +
-               boost::lexical_cast<std::wstring>(levels.max_input) + L" " +
-               boost::lexical_cast<std::wstring>(levels.gamma) + L" " +
-               boost::lexical_cast<std::wstring>(levels.min_output) + L" " +
-               boost::lexical_cast<std::wstring>(levels.max_output) + L"\r\n";
+        auto levels2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [levels2]() -> std::wstring {
+            auto levels = levels2.get().image_transform.levels;
+            return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(levels.min_input) + L" " +
+                   boost::lexical_cast<std::wstring>(levels.max_input) + L" " +
+                   boost::lexical_cast<std::wstring>(levels.gamma) + L" " +
+                   boost::lexical_cast<std::wstring>(levels.min_output) + L" " +
+                   boost::lexical_cast<std::wstring>(levels.max_output) + L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -1645,7 +1664,7 @@ std::wstring mixer_levels_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_fill_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1696,15 +1715,20 @@ void mixer_fill_describer(core::help_sink& sink, const core::help_repository& re
                  L"gets the current fill");
 }
 
-std::wstring mixer_fill_command(command_context& ctx)
+std::future<std::wstring> mixer_fill_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto transform   = get_current_transform(ctx).image_transform;
-        auto translation = transform.fill_translation;
-        auto scale       = transform.fill_scale;
-        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(translation[0]) + L" " +
-               boost::lexical_cast<std::wstring>(translation[1]) + L" " + boost::lexical_cast<std::wstring>(scale[0]) +
-               L" " + boost::lexical_cast<std::wstring>(scale[1]) + L"\r\n";
+        auto transform2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [transform2]() -> std::wstring {
+            auto transform   = transform2.get().image_transform;
+            auto translation = transform.fill_translation;
+            auto scale       = transform.fill_scale;
+            return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(translation[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(translation[1]) + L" " +
+                   boost::lexical_cast<std::wstring>(scale[0]) + L" " + boost::lexical_cast<std::wstring>(scale[1]) +
+                   L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -1727,7 +1751,7 @@ std::wstring mixer_fill_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_clip_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1767,16 +1791,21 @@ void mixer_clip_describer(core::help_sink& sink, const core::help_repository& re
                  L"for retrieving the current clipping rect");
 }
 
-std::wstring mixer_clip_command(command_context& ctx)
+std::future<std::wstring> mixer_clip_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto transform   = get_current_transform(ctx).image_transform;
-        auto translation = transform.clip_translation;
-        auto scale       = transform.clip_scale;
+        auto transform2 = get_current_transform(ctx).share();
 
-        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(translation[0]) + L" " +
-               boost::lexical_cast<std::wstring>(translation[1]) + L" " + boost::lexical_cast<std::wstring>(scale[0]) +
-               L" " + boost::lexical_cast<std::wstring>(scale[1]) + L"\r\n";
+        return std::async(std::launch::deferred, [transform2]() -> std::wstring {
+            auto transform   = transform2.get().image_transform;
+            auto translation = transform.clip_translation;
+            auto scale       = transform.clip_scale;
+
+            return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(translation[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(translation[1]) + L" " +
+                   boost::lexical_cast<std::wstring>(scale[0]) + L" " + boost::lexical_cast<std::wstring>(scale[1]) +
+                   L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -1799,7 +1828,7 @@ std::wstring mixer_clip_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_anchor_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1829,13 +1858,17 @@ void mixer_anchor_describer(core::help_sink& sink, const core::help_repository& 
                  L"gets the anchor point");
 }
 
-std::wstring mixer_anchor_command(command_context& ctx)
+std::future<std::wstring> mixer_anchor_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto transform = get_current_transform(ctx).image_transform;
-        auto anchor    = transform.anchor;
-        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(anchor[0]) + L" " +
-               boost::lexical_cast<std::wstring>(anchor[1]) + L"\r\n";
+        auto transform2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [transform2]() -> std::wstring {
+            auto transform = transform2.get().image_transform;
+            auto anchor    = transform.anchor;
+            return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(anchor[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(anchor[1]) + L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -1854,7 +1887,7 @@ std::wstring mixer_anchor_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_crop_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1887,13 +1920,18 @@ void mixer_crop_describer(core::help_sink& sink, const core::help_repository& re
                  L"for retrieving the current crop edges");
 }
 
-std::wstring mixer_crop_command(command_context& ctx)
+std::future<std::wstring> mixer_crop_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto crop = get_current_transform(ctx).image_transform.crop;
-        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(crop.ul[0]) + L" " +
-               boost::lexical_cast<std::wstring>(crop.ul[1]) + L" " + boost::lexical_cast<std::wstring>(crop.lr[0]) +
-               L" " + boost::lexical_cast<std::wstring>(crop.lr[1]) + L"\r\n";
+        auto transform2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [transform2]() -> std::wstring {
+            auto crop = transform2.get().image_transform.crop;
+            return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(crop.ul[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(crop.ul[1]) + L" " +
+                   boost::lexical_cast<std::wstring>(crop.lr[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(crop.lr[1]) + L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -1916,7 +1954,7 @@ std::wstring mixer_crop_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_rotation_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -1936,7 +1974,7 @@ void mixer_rotation_describer(core::help_sink& sink, const core::help_repository
                  L"to retrieve the current angle");
 }
 
-std::wstring mixer_rotation_command(command_context& ctx)
+std::future<std::wstring> mixer_rotation_command(command_context& ctx)
 {
     static const double PI = 3.141592653589793;
 
@@ -1967,18 +2005,23 @@ void mixer_perspective_describer(core::help_sink& sink, const core::help_reposit
                  L"for retrieving the current corners");
 }
 
-std::wstring mixer_perspective_command(command_context& ctx)
+std::future<std::wstring> mixer_perspective_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto perspective = get_current_transform(ctx).image_transform.perspective;
-        return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(perspective.ul[0]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.ul[1]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.ur[0]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.ur[1]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.lr[0]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.lr[1]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.ll[0]) + L" " +
-               boost::lexical_cast<std::wstring>(perspective.ll[1]) + L"\r\n";
+        auto transform2 = get_current_transform(ctx).share();
+
+        return std::async(std::launch::deferred, [transform2]() -> std::wstring {
+            auto perspective = transform2.get().image_transform.perspective;
+
+            return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(perspective.ul[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.ul[1]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.ur[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.ur[1]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.lr[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.lr[1]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.ll[0]) + L" " +
+                   boost::lexical_cast<std::wstring>(perspective.ll[1]) + L"\r\n";
+        });
     }
 
     transforms_applier transforms(ctx);
@@ -2009,7 +2052,7 @@ std::wstring mixer_perspective_command(command_context& ctx)
                                             tween));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_mipmap_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -2028,7 +2071,7 @@ void mixer_mipmap_describer(core::help_sink& sink, const core::help_repository& 
                  L"for getting the current state");
 }
 
-std::wstring mixer_mipmap_command(command_context& ctx)
+std::future<std::wstring> mixer_mipmap_command(command_context& ctx)
 {
     if (ctx.parameters.empty())
         return reply_value(ctx, [](const frame_transform& t) { return t.image_transform.use_mipmap ? 1 : 0; });
@@ -2044,7 +2087,7 @@ std::wstring mixer_mipmap_command(command_context& ctx)
                                             tweener(L"linear")));
     transforms.apply();
 
-    return L"202 MIXER OK\r\n";
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
 }
 
 void mixer_volume_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -2063,7 +2106,7 @@ void mixer_volume_describer(core::help_sink& sink, const core::help_repository& 
                  L"to retrieve the current volume");
 }
 
-std::wstring mixer_volume_command(command_context& ctx)
+std::future<std::wstring> mixer_volume_command(command_context& ctx)
 {
     return single_double_animatable_mixer_command(
         ctx,
@@ -2177,12 +2220,12 @@ void mixer_commit_describer(core::help_sink& sink, const core::help_repository& 
                  L">> MIXER 1 COMMIT");
 }
 
-std::wstring mixer_commit_command(command_context& ctx)
+std::future<std::wstring> mixer_commit_command(command_context& ctx)
 {
     transforms_applier transforms(ctx);
-    transforms.commit_deferred();
+    auto               r = transforms.commit_deferred().share();
 
-    return L"202 MIXER OK\r\n";
+    return std::async(std::launch::deferred, [r]() -> std::wstring { return L"202 MIXER OK\r\n"; });
 }
 
 void mixer_clear_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -2233,8 +2276,7 @@ std::wstring channel_grid_command(command_context& ctx)
     params.push_back(L"0");
     params.push_back(L"NAME");
     params.push_back(L"Channel Grid Window");
-    auto screen =
-        ctx.static_context->consumer_registry->create_consumer(params, self.stage.get(), get_channels(ctx));
+    auto screen = ctx.static_context->consumer_registry->create_consumer(params, self.stage.get(), get_channels(ctx));
 
     self.raw_channel->output().add(screen);
 
@@ -2254,7 +2296,8 @@ std::wstring channel_grid_command(command_context& ctx)
     auto num_channels       = ctx.channels.size() - 1;
     int  square_side_length = std::ceil(std::sqrt(num_channels));
 
-    auto ctx2 = command_context(ctx.static_context, ctx.channels, ctx.client, self, self.raw_channel->index(), ctx.layer_id);
+    auto ctx2 =
+        command_context(ctx.static_context, ctx.channels, ctx.client, self, self.raw_channel->index(), ctx.layer_id);
     ctx2.parameters.push_back(boost::lexical_cast<std::wstring>(square_side_length));
     mixer_grid_command(ctx2);
 
@@ -2587,25 +2630,40 @@ void info_channel_describer(core::help_sink& sink, const core::help_repository& 
     sink.para()->text(L"If ")->code(L"layer")->text(L" is ommitted information about the whole channel is returned.");
 }
 
-std::wstring info_channel_command(command_context& ctx)
+std::future<std::wstring> info_channel_command(command_context& ctx)
 {
-    boost::property_tree::wptree info;
-    int                          layer = ctx.layer_index(std::numeric_limits<int>::min());
+    int layer = ctx.layer_index(std::numeric_limits<int>::min());
 
     if (layer == std::numeric_limits<int>::min()) {
+        boost::property_tree::wptree info;
         info.add_child(L"channel", ctx.channel.raw_channel->info()).add(L"index", ctx.channel_index);
+        return make_ready_future(create_info_xml_reply(info));
     } else {
         if (ctx.parameters.size() >= 1) {
+            std::shared_future<std::shared_ptr<frame_producer>> producer;
+
             if (boost::iequals(ctx.parameters.at(0), L"B"))
-                info.add_child(L"producer", ctx.channel.stage->background(layer).get()->info()); // TODO - deadlock while batch?
+                producer = ctx.channel.stage->background(layer).share();
             else
-                info.add_child(L"producer", ctx.channel.stage->foreground(layer).get()->info()); // TODO - deadlock while batch?
+                producer = ctx.channel.stage->foreground(layer).share();
+
+            return std::async(std::launch::deferred, [producer]() -> std::wstring {
+                boost::property_tree::wptree info;
+                info.add_child(L"producer", producer.get()->info());
+
+                return create_info_xml_reply(info);
+            });
         } else {
-            info.add_child(L"layer", ctx.channel.stage->info(layer).get()).add(L"index", layer); // TODO - deadlock while batch?
+            auto linfo = ctx.channel.stage->info(layer).share();
+
+            return std::async(std::launch::deferred, [linfo, layer]() -> std::wstring {
+                boost::property_tree::wptree info;
+                info.add_child(L"layer", linfo.get()).add(L"index", layer);
+
+                return create_info_xml_reply(info);
+            });
         }
     }
-
-    return create_info_xml_reply(info);
 }
 
 void info_template_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -2735,7 +2793,8 @@ std::wstring info_delay_command(command_context& ctx)
     if (layer == std::numeric_limits<int>::min())
         info.add_child(L"channel-delay", ctx.channel.raw_channel->delay_info());
     else
-        info.add_child(L"layer-delay", ctx.channel.stage->delay_info(layer).get()).add(L"index", layer); // TODO - deadlock while batch?
+        info.add_child(L"layer-delay", ctx.channel.stage->delay_info(layer).get())
+            .add(L"index", layer); // TODO - deadlock while batch?
 
     return create_info_xml_reply(info, L"DELAY");
 }
@@ -3100,30 +3159,60 @@ void ping_describer(core::help_sink& sink, const core::help_repository& repo)
 }
 
 void amcp_command_repository_wrapper::register_command(std::wstring              category,
-                        std::wstring              name,
-                        core::help_item_describer describer,
-                        amcp_command_impl_func         command,
-                        int                       min_num_params)
-{
-	std::shared_ptr<command_context_factory> ctx3 = ctx_;
-        auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
-            auto ctx2 = ctx3->create(ctx, channels);
-            return command(ctx2);
-        };
-
-        repo_->register_command(category, name, describer, func, min_num_params);
-}
-
-void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
-                                std::wstring              name,
-                                core::help_item_describer describer,
-                                amcp_command_impl_func         command,
-                                int                       min_num_params)
+                                                       std::wstring              name,
+                                                       core::help_item_describer describer,
+                                                       amcp_command_impl_func    command,
+                                                       int                       min_num_params)
 {
     std::shared_ptr<command_context_factory> ctx3 = ctx_;
     auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
         auto ctx2 = ctx3->create(ctx, channels);
         return command(ctx2);
+    };
+
+    repo_->register_command(category, name, describer, func, min_num_params);
+}
+
+void amcp_command_repository_wrapper::register_command(std::wstring              category,
+                                                       std::wstring              name,
+                                                       core::help_item_describer describer,
+                                                       amcp_command_impl_func2   command,
+                                                       int                       min_num_params)
+{
+    std::shared_ptr<command_context_factory> ctx3 = ctx_;
+    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
+        auto ctx2 = ctx3->create(ctx, channels);
+        return make_ready_future(command(ctx2));
+    };
+
+    repo_->register_command(category, name, describer, func, min_num_params);
+}
+
+void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
+                                                               std::wstring              name,
+                                                               core::help_item_describer describer,
+                                                               amcp_command_impl_func    command,
+                                                               int                       min_num_params)
+{
+    std::shared_ptr<command_context_factory> ctx3 = ctx_;
+    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
+        auto ctx2 = ctx3->create(ctx, channels);
+        return command(ctx2);
+    };
+
+    repo_->register_channel_command(category, name, describer, func, min_num_params);
+}
+
+void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
+                                                               std::wstring              name,
+                                                               core::help_item_describer describer,
+                                                               amcp_command_impl_func2   command,
+                                                               int                       min_num_params)
+{
+    std::shared_ptr<command_context_factory> ctx3 = ctx_;
+    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
+        auto ctx2 = ctx3->create(ctx, channels);
+        return make_ready_future(command(ctx2));
     };
 
     repo_->register_channel_command(category, name, describer, func, min_num_params);
@@ -3190,10 +3279,10 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_channel_command(
         L"Mixer Commands", L"MIXER MASTERVOLUME", mixer_mastervolume_describer, mixer_mastervolume_command, 0);
     repo->register_channel_command(L"Mixer Commands",
-                                  L"MIXER STRAIGHT_ALPHA_OUTPUT",
-                                  mixer_straight_alpha_describer,
-                                  mixer_straight_alpha_command,
-                                  0);
+                                   L"MIXER STRAIGHT_ALPHA_OUTPUT",
+                                   mixer_straight_alpha_describer,
+                                   mixer_straight_alpha_command,
+                                   0);
     repo->register_channel_command(L"Mixer Commands", L"MIXER GRID", mixer_grid_describer, mixer_grid_command, 1);
     repo->register_channel_command(L"Mixer Commands", L"MIXER COMMIT", mixer_commit_describer, mixer_commit_command, 0);
     repo->register_channel_command(L"Mixer Commands", L"MIXER CLEAR", mixer_clear_describer, mixer_clear_command, 0);
@@ -3206,10 +3295,10 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_command(
         L"Thumbnail Commands", L"THUMBNAIL GENERATE", thumbnail_generate_describer, thumbnail_generate_command, 1);
     repo->register_command(L"Thumbnail Commands",
-                          L"THUMBNAIL GENERATE_ALL",
-                          thumbnail_generateall_describer,
-                          thumbnail_generateall_command,
-                          0);
+                           L"THUMBNAIL GENERATE_ALL",
+                           thumbnail_generateall_describer,
+                           thumbnail_generateall_command,
+                           0);
 
     repo->register_command(L"Query Commands", L"CINF", cinf_describer, cinf_command, 1);
     repo->register_command(L"Query Commands", L"CLS", cls_describer, cls_command, 0);
@@ -3235,8 +3324,8 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_command(L"Query Commands", L"HELP PRODUCER", help_producer_describer, help_producer_command, 0);
     repo->register_command(L"Query Commands", L"HELP CONSUMER", help_consumer_describer, help_consumer_command, 0);
 
-  //  repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"REQ", req_describer);
-//    repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"PING", ping_describer);
+    //  repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"REQ", req_describer);
+    //    repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"PING", ping_describer);
 
     register_scheduler_commands(repo);
 }

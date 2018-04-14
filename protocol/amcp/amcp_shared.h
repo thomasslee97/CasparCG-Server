@@ -48,7 +48,7 @@ struct command_context_simple
     }
 };
 
-typedef std::function<std::wstring(const command_context_simple& args, const std::vector<channel_context>& channels)>
+typedef std::function<std::future<std::wstring>(const command_context_simple& args, const std::vector<channel_context>& channels)>
     amcp_command_func;
 
 }}} // namespace caspar::protocol::amcp

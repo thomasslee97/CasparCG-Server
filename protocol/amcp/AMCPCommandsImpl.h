@@ -26,7 +26,8 @@
 
 namespace caspar { namespace protocol { namespace amcp {
 
-typedef std::function<std::wstring(command_context& args)> amcp_command_impl_func;
+typedef std::function<std::future<std::wstring>(command_context& args)> amcp_command_impl_func;
+typedef std::function<std::wstring(command_context& args)> amcp_command_impl_func2;
 
 // TODO - these classes feel messy. at the very least, they should have their own file, and are passed in preconstructed to all of the register_commands portions
 class command_context_factory
@@ -65,10 +66,22 @@ class amcp_command_repository_wrapper
                           amcp_command_impl_func    command,
                           int                       min_num_params);
 
+    void register_command(std::wstring              category,
+                          std::wstring              name,
+                          core::help_item_describer describer,
+                          amcp_command_impl_func2    command,
+                          int                       min_num_params);
+
     void register_channel_command(std::wstring              category,
                                   std::wstring              name,
                                   core::help_item_describer describer,
                                   amcp_command_impl_func    command,
+                                  int                       min_num_params);
+
+    void register_channel_command(std::wstring              category,
+                                  std::wstring              name,
+                                  core::help_item_describer describer,
+                                  amcp_command_impl_func2    command,
                                   int                       min_num_params);
 
     spl::shared_ptr<core::help_repository> help_repo() const;

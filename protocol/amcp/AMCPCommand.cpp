@@ -26,13 +26,9 @@
 
 namespace caspar { namespace protocol { namespace amcp {
 
-void AMCPCommand::Execute(const std::vector<channel_context>& channels, bool reply_without_req_id)
+std::future<std::wstring> AMCPCommand::Execute(const std::vector<channel_context>& channels)
 {
-    const std::wstring res = command_(ctx_, channels);
-
-    if (reply_without_req_id || !request_id_.empty()) {
-        SendReply(res);
-    }
+    return command_(ctx_, channels);
 }
 
 void send_reply(IO::ClientInfoPtrStd client, const std::wstring& str, const std::wstring& request_id)
@@ -47,7 +43,13 @@ void send_reply(IO::ClientInfoPtrStd client, const std::wstring& str, const std:
     client->send(std::move(reply));
 }
 
-void AMCPCommand::SendReply(const std::wstring& str) const { send_reply(ctx_.client, str, request_id_); }
+void AMCPCommand::SendReply(const std::wstring& str, bool reply_without_req_id) const
+{
+    if (reply_without_req_id || !request_id_.empty()) 
+    {
+        send_reply(ctx_.client, str, request_id_);
+    }
+}
 
 void AMCPGroupCommand::SendReply(const std::wstring& str) const
 {
@@ -57,7 +59,7 @@ void AMCPGroupCommand::SendReply(const std::wstring& str) const
     }
 
     if (commands_.size() == 1) {
-        commands_.at(0)->SendReply(str);
+        commands_.at(0)->SendReply(str, true);
     }
 }
 
