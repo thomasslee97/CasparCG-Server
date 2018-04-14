@@ -11,7 +11,6 @@ namespace caspar { namespace protocol { namespace amcp {
 
 struct amcp_command_static_context
 {
-    const std::vector<channel_context>                           channels;
     const std::shared_ptr<core::thumbnail_generator>             thumb_gen;
     const spl::shared_ptr<core::media_info_repository>           media_info_repo;
     const spl::shared_ptr<core::system_info_provider_repository> system_info_provider_repo;
@@ -24,8 +23,7 @@ struct amcp_command_static_context
     const std::shared_ptr<accelerator::ogl::device>              ogl_device;
     std::promise<bool>&                                          shutdown_server_now;
 
-    amcp_command_static_context(const std::vector<channel_context>                            channels,
-                                const std::shared_ptr<core::thumbnail_generator>&             thumb_gen,
+    amcp_command_static_context(const std::shared_ptr<core::thumbnail_generator>&             thumb_gen,
                                 const spl::shared_ptr<core::media_info_repository>&           media_info_repo,
                                 const spl::shared_ptr<core::system_info_provider_repository>& system_info_provider_repo,
                                 const spl::shared_ptr<core::cg_producer_registry>             cg_registry,
@@ -36,8 +34,7 @@ struct amcp_command_static_context
                                 const std::shared_ptr<amcp_command_repository>                parser,
                                 const std::shared_ptr<accelerator::ogl::device>&              ogl_device,
                                 std::promise<bool>&                                           shutdown_server_now)
-        : channels(std::move(channels))
-        , thumb_gen(std::move(thumb_gen))
+        : thumb_gen(std::move(thumb_gen))
         , media_info_repo(std::move(media_info_repo))
         , system_info_provider_repo(std::move(system_info_provider_repo))
         , cg_registry(std::move(cg_registry))
@@ -52,31 +49,30 @@ struct amcp_command_static_context
     }
 };
 
-struct command_context
-{
+struct command_context {
     std::shared_ptr<amcp_command_static_context> static_context;
-    const IO::ClientInfoPtr           client;
-    const channel_context             channel;
-    const int                         channel_index;
-    const int                         layer_id;
-    std::vector<std::wstring>         parameters;
+    const std::vector<channel_context>           channels;
+    const IO::ClientInfoPtr                      client;
+    const channel_context                        channel;
+    const int                                    channel_index;
+    const int                                    layer_id;
+    std::vector<std::wstring>                    parameters;
 
     int layer_index(int default_ = 0) const { return layer_id == -1 ? default_ : layer_id; }
 
     command_context(std::shared_ptr<amcp_command_static_context> static_context,
-                    IO::ClientInfoPtr client,
-                    channel_context   channel,
-                    int               channel_index,
-                    int               layer_id)
+                    const std::vector<channel_context>           channels,
+                    IO::ClientInfoPtr                            client,
+                    channel_context                              channel,
+                    int                                          channel_index,
+                    int                                          layer_id)
         : static_context(static_context)
+        , channels(std::move(channels))
         , client(std::move(client))
         , channel(channel)
         , channel_index(channel_index)
-        , layer_id(layer_id)
-    {
+        , layer_id(layer_id) {
     }
-
-    std::vector<channel_context> channels() const { return static_context->channels; }
 };
 
 }}} // namespace caspar::protocol::amcp

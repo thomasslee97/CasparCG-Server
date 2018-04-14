@@ -77,7 +77,7 @@ public:
 
 	void reset()
 	{
-		channel_->stage().clear(core::cg_proxy::DEFAULT_LAYER);
+		channel_->stage()->clear(core::cg_proxy::DEFAULT_LAYER);
 		clock_loaded_ = false;
 		CASPAR_LOG(info) << L"CLK: Recieved and executed reset-command";
 	}

@@ -287,7 +287,7 @@ struct server::impl : boost::noncopyable
                 try {
                     if (name != L"<xmlcomment>")
                         channel->output().add(consumer_registry_->create_consumer(
-                            name, xml_consumer.second, &channel->stage(), channels_));
+                            name, xml_consumer.second, channel->stage().get(), channels_));
                 } catch (const user_error& e) {
                     CASPAR_LOG_CURRENT_EXCEPTION_AT_LEVEL(debug);
                     CASPAR_LOG(error) << get_message_and_context(e) << " Turn on log level debug for stacktrace.";
@@ -382,7 +382,7 @@ struct server::impl : boost::noncopyable
         int index = 0;
         for (const auto& channel : channels) {
             const std::wstring lifecycle_key = L"lock" + boost::lexical_cast<std::wstring>(index);
-            res.push_back(amcp::channel_context(channel, lifecycle_key));
+            res.push_back(amcp::channel_context(channel, channel->stage(), lifecycle_key));
             ++index;
         }
 
@@ -396,18 +396,18 @@ struct server::impl : boost::noncopyable
         amcp_command_repo_ =
             std::make_shared<amcp::amcp_command_repository>(std::move(build_channel_contexts(channels_)), help_repo_);
 
-        auto ctx = std::make_shared<amcp::amcp_command_static_context>(std::move(build_channel_contexts(channels_)),
-                                                                       thumbnail_generator_,
-                                                                       media_info_repo_,
-                                                                       system_info_provider_repo_,
-                                                                       cg_registry_,
-                                                                       help_repo_,
-                                                                       producer_registry_,
-                                                                       consumer_registry_,
-                                                                       spl::make_shared_ptr(amcp_command_scheduler_),
-                                                                       amcp_command_repo_,
-                                                                       accelerator_.get_ogl_device(),
-                                                                       shutdown_server_now_);
+        auto ctx =
+            std::make_shared<amcp::amcp_command_static_context>(thumbnail_generator_,
+                                                                media_info_repo_,
+                                                                system_info_provider_repo_,
+                                                                cg_registry_,
+                                                                help_repo_,
+                                                                producer_registry_,
+                                                                consumer_registry_,
+                                                                spl::make_shared_ptr(amcp_command_scheduler_),
+                                                                amcp_command_repo_,
+                                                                accelerator_.get_ogl_device(),
+                                                                shutdown_server_now_);
 
         amcp_context_factory_ = std::make_shared<amcp::command_context_factory>(std::move(ctx));
 

@@ -296,8 +296,8 @@ std::wstring ListTemplates(const spl::shared_ptr<core::cg_producer_registry>& cg
 
 std::vector<spl::shared_ptr<core::video_channel>> get_channels(const command_context& ctx)
 {
-    return cpplinq::from(ctx.static_context->channels)
-        .select([](channel_context c) { return spl::make_shared_ptr(c.channel); })
+    return cpplinq::from(ctx.channels)
+        .select([](channel_context c) { return spl::make_shared_ptr(c.raw_channel); })
         .to_vector();
 }
 
@@ -406,7 +406,7 @@ std::wstring loadbg_command(command_context& ctx)
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
     core::diagnostics::call_context::for_thread().layer         = ctx.layer_index();
 
-    auto channel = ctx.channel.channel;
+    auto channel = ctx.channel.raw_channel;
     auto pFP =
         ctx.static_context->producer_registry->create_producer(get_producer_dependencies(channel, ctx), ctx.parameters);
 
@@ -417,9 +417,9 @@ std::wstring loadbg_command(command_context& ctx)
 
     auto pFP2 = create_transition_producer(channel->video_format_desc().field_mode, pFP, transitionInfo);
     if (auto_play)
-        channel->stage().load(ctx.layer_index(), pFP2, false, transitionInfo.duration); // TODO: LOOP
+        ctx.channel.stage->load(ctx.layer_index(), pFP2, false, transitionInfo.duration); // TODO: LOOP
     else
-        channel->stage().load(ctx.layer_index(), pFP2, false); // TODO: LOOP
+        ctx.channel.stage->load(ctx.layer_index(), pFP2, false); // TODO: LOOP
 
     return L"202 LOADBG OK\r\n";
 }
@@ -442,9 +442,9 @@ std::wstring load_command(command_context& ctx)
     core::diagnostics::scoped_call_context save;
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
     core::diagnostics::call_context::for_thread().layer         = ctx.layer_index();
-    auto pFP                                                    = ctx.static_context->producer_registry->create_producer(
-        get_producer_dependencies(ctx.channel.channel, ctx), ctx.parameters);
-    ctx.channel.channel->stage().load(ctx.layer_index(), pFP, true);
+    auto pFP = ctx.static_context->producer_registry->create_producer(
+        get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
+    ctx.channel.stage->load(ctx.layer_index(), pFP, true);
 
     return L"202 LOAD OK\r\n";
 }
@@ -473,7 +473,7 @@ std::wstring play_command(command_context& ctx)
     if (!ctx.parameters.empty())
         loadbg_command(ctx);
 
-    ctx.channel.channel->stage().play(ctx.layer_index());
+    ctx.channel.stage->play(ctx.layer_index());
 
     return L"202 PLAY OK\r\n";
 }
@@ -493,7 +493,7 @@ void pause_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring pause_command(command_context& ctx)
 {
-    ctx.channel.channel->stage().pause(ctx.layer_index());
+    ctx.channel.stage->pause(ctx.layer_index());
     return L"202 PAUSE OK\r\n";
 }
 
@@ -512,7 +512,7 @@ void resume_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring resume_command(command_context& ctx)
 {
-    ctx.channel.channel->stage().resume(ctx.layer_index());
+    ctx.channel.stage->resume(ctx.layer_index());
     return L"202 RESUME OK\r\n";
 }
 
@@ -528,7 +528,7 @@ void stop_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring stop_command(command_context& ctx)
 {
-    ctx.channel.channel->stage().stop(ctx.layer_index());
+    ctx.channel.stage->stop(ctx.layer_index());
     return L"202 STOP OK\r\n";
 }
 
@@ -550,9 +550,9 @@ std::wstring clear_command(command_context& ctx)
 {
     int index = ctx.layer_index(std::numeric_limits<int>::min());
     if (index != std::numeric_limits<int>::min())
-        ctx.channel.channel->stage().clear(index);
+        ctx.channel.stage->clear(index);
     else
-        ctx.channel.channel->stage().clear();
+        ctx.channel.stage->clear();
 
     return L"202 CLEAR OK\r\n";
 }
@@ -569,7 +569,7 @@ void call_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring call_command(command_context& ctx)
 {
-    auto result = ctx.channel.channel->stage().call(ctx.layer_index(), ctx.parameters).get();
+    auto result = ctx.channel.stage->call(ctx.layer_index(), ctx.parameters).get(); // TODO - this could deadlock if run in a batch
 
     // TODO: because of std::async deferred timed waiting does not work
 
@@ -611,17 +611,15 @@ std::wstring swap_command(command_context& ctx)
         std::vector<std::string> strs;
         boost::split(strs, ctx.parameters[0], boost::is_any_of("-"));
 
-        auto ch1 = ctx.channel.channel;
-        auto ch2 = ctx.static_context->channels.at(boost::lexical_cast<int>(strs.at(0)) - 1);
+        auto ch2 = ctx.channels.at(boost::lexical_cast<int>(strs.at(0)) - 1);
 
         int l1 = ctx.layer_index();
         int l2 = boost::lexical_cast<int>(strs.at(1));
 
-        ch1->stage().swap_layer(l1, l2, ch2.channel->stage(), swap_transforms);
+        ctx.channel.stage->swap_layer(l1, l2, ch2.stage, swap_transforms);
     } else {
-        auto ch1 = ctx.channel.channel;
-        auto ch2 = ctx.static_context->channels.at(boost::lexical_cast<int>(ctx.parameters[0]) - 1);
-        ch1->stage().swap_layers(ch2.channel->stage(), swap_transforms);
+        auto ch2 = ctx.channels.at(boost::lexical_cast<int>(ctx.parameters[0]) - 1);
+        ctx.channel.stage->swap_layers(ch2.stage, swap_transforms);
     }
 
     return L"202 SWAP OK\r\n";
@@ -673,8 +671,8 @@ std::wstring add_command(command_context& ctx)
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
 
     auto consumer = ctx.static_context->consumer_registry->create_consumer(
-        ctx.parameters, &ctx.channel.channel->stage(), get_channels(ctx));
-    ctx.channel.channel->output().add(ctx.layer_index(consumer->index()), consumer);
+        ctx.parameters, ctx.channel.stage.get(), get_channels(ctx));
+    ctx.channel.raw_channel->output().add(ctx.layer_index(consumer->index()), consumer);
 
     return L"202 ADD OK\r\n";
 }
@@ -707,11 +705,11 @@ std::wstring remove_command(command_context& ctx)
         replace_placeholders(L"<CLIENT_IP_ADDRESS>", ctx.client->address(), ctx.parameters);
 
         index = ctx.static_context->consumer_registry
-                    ->create_consumer(ctx.parameters, &ctx.channel.channel->stage(), get_channels(ctx))
+                    ->create_consumer(ctx.parameters, ctx.channel.stage.get(), get_channels(ctx))
                     ->index();
     }
 
-    ctx.channel.channel->output().remove(index);
+    ctx.channel.raw_channel->output().remove(index);
 
     return L"202 REMOVE OK\r\n";
 }
@@ -732,8 +730,8 @@ void print_describer(core::help_sink& sink, const core::help_repository& repo)
 
 std::wstring print_command(command_context& ctx)
 {
-    ctx.channel.channel->output().add(ctx.static_context->consumer_registry->create_consumer(
-        {L"IMAGE"}, &ctx.channel.channel->stage(), get_channels(ctx)));
+    ctx.channel.raw_channel->output().add(
+        ctx.static_context->consumer_registry->create_consumer({L"IMAGE"}, ctx.channel.stage.get(), get_channels(ctx)));
 
     return L"202 PRINT OK\r\n";
 }
@@ -793,7 +791,7 @@ std::wstring set_command(command_context& ctx)
     if (name == L"MODE") {
         auto format_desc = core::video_format_desc(value);
         if (format_desc.format != core::video_format::invalid) {
-            ctx.channel.channel->video_format_desc(format_desc);
+            ctx.channel.raw_channel->video_format_desc(format_desc);
             return L"202 SET MODE OK\r\n";
         }
 
@@ -802,7 +800,7 @@ std::wstring set_command(command_context& ctx)
         auto channel_layout = core::audio_channel_layout_repository::get_default()->get_layout(value);
 
         if (channel_layout) {
-            ctx.channel.channel->audio_channel_layout(*channel_layout);
+            ctx.channel.raw_channel->audio_channel_layout(*channel_layout);
             return L"202 SET CHANNEL_LAYOUT OK\r\n";
         }
 
@@ -1027,10 +1025,10 @@ std::wstring cg_add_command(command_context& ctx)
 
     auto filename = ctx.parameters.at(1);
     auto proxy =
-        ctx.static_context->cg_registry->get_or_create_proxy(spl::make_shared_ptr(ctx.channel.channel),
-                                                            get_producer_dependencies(ctx.channel.channel, ctx),
-                                                            ctx.layer_index(core::cg_proxy::DEFAULT_LAYER),
-                                                            filename);
+        ctx.static_context->cg_registry->get_or_create_proxy(spl::make_shared_ptr(ctx.channel.raw_channel),
+                                                             get_producer_dependencies(ctx.channel.raw_channel, ctx),
+                                                             ctx.layer_index(core::cg_proxy::DEFAULT_LAYER),
+                                                             filename);
 
     if (proxy == core::cg_proxy::empty())
         CASPAR_THROW_EXCEPTION(file_not_found() << msg_info(L"Could not find template " + filename));
@@ -1053,7 +1051,7 @@ std::wstring cg_play_command(command_context& ctx)
 {
     int layer = boost::lexical_cast<int>(ctx.parameters.at(0));
     ctx.static_context->cg_registry
-        ->get_proxy(spl::make_shared_ptr(ctx.channel.channel), ctx.layer_index(core::cg_proxy::DEFAULT_LAYER))
+        ->get_proxy(spl::make_shared_ptr(ctx.channel.raw_channel), ctx.layer_index(core::cg_proxy::DEFAULT_LAYER))
         ->play(layer);
 
     return L"202 CG OK\r\n";
@@ -1061,8 +1059,8 @@ std::wstring cg_play_command(command_context& ctx)
 
 spl::shared_ptr<core::cg_proxy> get_expected_cg_proxy(command_context& ctx)
 {
-    auto proxy = ctx.static_context->cg_registry->get_proxy(spl::make_shared_ptr(ctx.channel.channel),
-                                                           ctx.layer_index(core::cg_proxy::DEFAULT_LAYER));
+    auto proxy = ctx.static_context->cg_registry->get_proxy(spl::make_shared_ptr(ctx.channel.raw_channel),
+                                                            ctx.layer_index(core::cg_proxy::DEFAULT_LAYER));
 
     if (proxy == cg_proxy::empty())
         CASPAR_THROW_EXCEPTION(expected_user_error() << msg_info(L"No CG proxy running on layer"));
@@ -1137,7 +1135,7 @@ void cg_clear_describer(core::help_sink& sink, const core::help_repository& repo
 
 std::wstring cg_clear_command(command_context& ctx)
 {
-    ctx.channel.channel->stage().clear(ctx.layer_index(core::cg_proxy::DEFAULT_LAYER));
+    ctx.channel.stage->clear(ctx.layer_index(core::cg_proxy::DEFAULT_LAYER));
 
     return L"202 CG OK\r\n";
 }
@@ -1221,7 +1219,7 @@ std::wstring cg_info_command(command_context& ctx)
 
 core::frame_transform get_current_transform(command_context& ctx)
 {
-    return ctx.channel.channel->stage().get_current_transform(ctx.layer_index()).get();
+    return ctx.channel.stage->get_current_transform(ctx.layer_index()).get(); // TODO - this could deadlcok ina batch?
 }
 
 template <typename Func>
@@ -1255,7 +1253,7 @@ class transforms_applier
     void commit_deferred()
     {
         auto& transforms = deferred_transforms_[ctx_.channel_index];
-        ctx_.channel.channel->stage().apply_transforms(transforms).get();
+        ctx_.channel.stage->apply_transforms(transforms).get(); // TODO - deadlock while batch?
         transforms.clear();
     }
 
@@ -1265,7 +1263,7 @@ class transforms_applier
             auto& defer_tranforms = deferred_transforms_[ctx_.channel_index];
             defer_tranforms.insert(defer_tranforms.end(), transforms_.begin(), transforms_.end());
         } else
-            ctx_.channel.channel->stage().apply_transforms(transforms_);
+            ctx_.channel.stage->apply_transforms(transforms_);
     }
 };
 tbb::concurrent_unordered_map<int, std::vector<stage::transform_tuple_t>> transforms_applier::deferred_transforms_;
@@ -2087,12 +2085,12 @@ void mixer_mastervolume_describer(core::help_sink& sink, const core::help_reposi
 std::wstring mixer_mastervolume_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        auto volume = ctx.channel.channel->mixer().get_master_volume();
+        auto volume = ctx.channel.raw_channel->mixer().get_master_volume();
         return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(volume) + L"\r\n";
     }
 
     float master_volume = boost::lexical_cast<float>(ctx.parameters.at(0));
-    ctx.channel.channel->mixer().set_master_volume(master_volume);
+    ctx.channel.raw_channel->mixer().set_master_volume(master_volume);
 
     return L"202 MIXER OK\r\n";
 }
@@ -2114,12 +2112,12 @@ void mixer_straight_alpha_describer(core::help_sink& sink, const core::help_repo
 std::wstring mixer_straight_alpha_command(command_context& ctx)
 {
     if (ctx.parameters.empty()) {
-        bool state = ctx.channel.channel->mixer().get_straight_alpha_output();
+        bool state = ctx.channel.raw_channel->mixer().get_straight_alpha_output();
         return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(state) + L"\r\n";
     }
 
     bool state = boost::lexical_cast<bool>(ctx.parameters.at(0));
-    ctx.channel.channel->mixer().set_straight_alpha_output(state);
+    ctx.channel.raw_channel->mixer().set_straight_alpha_output(state);
 
     return L"202 MIXER OK\r\n";
 }
@@ -2202,9 +2200,9 @@ std::wstring mixer_clear_command(command_context& ctx)
     int layer = ctx.layer_id;
 
     if (layer == -1)
-        ctx.channel.channel->stage().clear_transforms();
+        ctx.channel.stage->clear_transforms();
     else
-        ctx.channel.channel->stage().clear_transforms(layer);
+        ctx.channel.stage->clear_transforms(layer);
 
     return L"202 MIXER OK\r\n";
 }
@@ -2225,10 +2223,10 @@ void channel_grid_describer(core::help_sink& sink, const core::help_repository& 
 std::wstring channel_grid_command(command_context& ctx)
 {
     int  index = 1;
-    auto self  = ctx.static_context->channels.back();
+    auto self  = ctx.channels.back();
 
     core::diagnostics::scoped_call_context save;
-    core::diagnostics::call_context::for_thread().video_channel = ctx.static_context->channels.size();
+    core::diagnostics::call_context::for_thread().video_channel = ctx.channels.size();
 
     std::vector<std::wstring> params;
     params.push_back(L"SCREEN");
@@ -2236,26 +2234,27 @@ std::wstring channel_grid_command(command_context& ctx)
     params.push_back(L"NAME");
     params.push_back(L"Channel Grid Window");
     auto screen =
-        ctx.static_context->consumer_registry->create_consumer(params, &self.channel->stage(), get_channels(ctx));
+        ctx.static_context->consumer_registry->create_consumer(params, self.stage.get(), get_channels(ctx));
 
-    self.channel->output().add(screen);
+    self.raw_channel->output().add(screen);
 
-    for (auto& channel : ctx.static_context->channels) {
-        if (channel.channel != self.channel) {
+    for (auto& channel : ctx.channels) {
+        if (channel.raw_channel != self.raw_channel) {
             core::diagnostics::call_context::for_thread().layer = index;
-            auto producer                                       = ctx.static_context->producer_registry->create_producer(
-                get_producer_dependencies(self.channel, ctx),
-                L"route://" + boost::lexical_cast<std::wstring>(channel.channel->index()) + L" NO_AUTO_DEINTERLACE");
-            self.channel->stage().load(index, producer, false);
-            self.channel->stage().play(index);
+            auto producer = ctx.static_context->producer_registry->create_producer(
+                get_producer_dependencies(self.raw_channel, ctx),
+                L"route://" + boost::lexical_cast<std::wstring>(channel.raw_channel->index()) +
+                    L" NO_AUTO_DEINTERLACE");
+            self.stage->load(index, producer, false);
+            self.stage->play(index);
             index++;
         }
     }
 
-    auto num_channels       = ctx.static_context->channels.size() - 1;
+    auto num_channels       = ctx.channels.size() - 1;
     int  square_side_length = std::ceil(std::sqrt(num_channels));
 
-    auto ctx2 = command_context(ctx.static_context, ctx.client, self, self.channel->index(), ctx.layer_id);
+    auto ctx2 = command_context(ctx.static_context, ctx.channels, ctx.client, self, self.raw_channel->index(), ctx.layer_id);
     ctx2.parameters.push_back(boost::lexical_cast<std::wstring>(square_side_length));
     mixer_grid_command(ctx2);
 
@@ -2559,9 +2558,8 @@ std::wstring info_command(command_context& ctx)
     std::wstringstream replyString;
     // This is needed for backwards compatibility with old clients
     replyString << L"200 INFO OK\r\n";
-    for (size_t n = 0; n < ctx.static_context->channels.size(); ++n)
-        replyString << n + 1 << L" " << ctx.static_context->channels.at(n).channel->video_format_desc().name
-                    << L" PLAYING\r\n";
+    for (size_t n = 0; n < ctx.channels.size(); ++n)
+        replyString << n + 1 << L" " << ctx.channels.at(n).raw_channel->video_format_desc().name << L" PLAYING\r\n";
     replyString << L"\r\n";
     return replyString.str();
 }
@@ -2595,15 +2593,15 @@ std::wstring info_channel_command(command_context& ctx)
     int                          layer = ctx.layer_index(std::numeric_limits<int>::min());
 
     if (layer == std::numeric_limits<int>::min()) {
-        info.add_child(L"channel", ctx.channel.channel->info()).add(L"index", ctx.channel_index);
+        info.add_child(L"channel", ctx.channel.raw_channel->info()).add(L"index", ctx.channel_index);
     } else {
         if (ctx.parameters.size() >= 1) {
             if (boost::iequals(ctx.parameters.at(0), L"B"))
-                info.add_child(L"producer", ctx.channel.channel->stage().background(layer).get()->info());
+                info.add_child(L"producer", ctx.channel.stage->background(layer).get()->info()); // TODO - deadlock while batch?
             else
-                info.add_child(L"producer", ctx.channel.channel->stage().foreground(layer).get()->info());
+                info.add_child(L"producer", ctx.channel.stage->foreground(layer).get()->info()); // TODO - deadlock while batch?
         } else {
-            info.add_child(L"layer", ctx.channel.channel->stage().info(layer).get()).add(L"index", layer);
+            info.add_child(L"layer", ctx.channel.stage->info(layer).get()).add(L"index", layer); // TODO - deadlock while batch?
         }
     }
 
@@ -2696,8 +2694,8 @@ std::wstring info_server_command(command_context& ctx)
     boost::property_tree::wptree info;
 
     int index = 0;
-    for (auto& channel : ctx.static_context->channels)
-        info.add_child(L"channels.channel", channel.channel->info()).add(L"index", ++index);
+    for (auto& channel : ctx.channels)
+        info.add_child(L"channels.channel", channel.raw_channel->info()).add(L"index", ++index);
 
     return create_info_xml_reply(info, L"SERVER");
 }
@@ -2735,9 +2733,9 @@ std::wstring info_delay_command(command_context& ctx)
     auto                         layer = ctx.layer_index(std::numeric_limits<int>::min());
 
     if (layer == std::numeric_limits<int>::min())
-        info.add_child(L"channel-delay", ctx.channel.channel->delay_info());
+        info.add_child(L"channel-delay", ctx.channel.raw_channel->delay_info());
     else
-        info.add_child(L"layer-delay", ctx.channel.channel->stage().delay_info(layer).get()).add(L"index", layer);
+        info.add_child(L"layer-delay", ctx.channel.stage->delay_info(layer).get()).add(L"index", layer); // TODO - deadlock while batch?
 
     return create_info_xml_reply(info, L"DELAY");
 }
@@ -3045,7 +3043,7 @@ void lock_describer(core::help_sink& sink, const core::help_repository& repo)
 std::wstring lock_command(command_context& ctx)
 {
     int  channel_index = boost::lexical_cast<int>(ctx.parameters.at(0)) - 1;
-    auto lock          = ctx.static_context->channels.at(channel_index).lock;
+    auto lock          = ctx.channels.at(channel_index).lock;
     auto command       = boost::to_upper_copy(ctx.parameters.at(1));
 
     if (command == L"ACQUIRE") {
@@ -3108,12 +3106,12 @@ void amcp_command_repository_wrapper::register_command(std::wstring             
                         int                       min_num_params)
 {
 	std::shared_ptr<command_context_factory> ctx3 = ctx_;
-    auto func = [ctx3, command](const command_context_simple& ctx) {
-        auto ctx2 = ctx3->create(ctx);
-        return command(ctx2);
-    };
+        auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
+            auto ctx2 = ctx3->create(ctx, channels);
+            return command(ctx2);
+        };
 
-    repo_->register_command(category, name, describer, func, min_num_params);
+        repo_->register_command(category, name, describer, func, min_num_params);
 }
 
 void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
@@ -3122,9 +3120,9 @@ void amcp_command_repository_wrapper::register_channel_command(std::wstring     
                                 amcp_command_impl_func         command,
                                 int                       min_num_params)
 {
-	std::shared_ptr<command_context_factory> ctx3 = ctx_;
-	auto func = [ctx3, command](const command_context_simple& ctx) {
-        auto ctx2 = ctx3->create(ctx);
+    std::shared_ptr<command_context_factory> ctx3 = ctx_;
+    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
+        auto ctx2 = ctx3->create(ctx, channels);
         return command(ctx2);
     };
 

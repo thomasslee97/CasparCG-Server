@@ -58,8 +58,8 @@ class video_channel final
 
     // Properties
 
-    const core::stage&  stage() const;
-    core::stage&        stage();
+    const std::shared_ptr<core::stage>& stage() const;
+    std::shared_ptr<core::stage>&                       stage();
     const core::mixer&  mixer() const;
     core::mixer&        mixer();
     const core::output& output() const;

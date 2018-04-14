@@ -37,11 +37,10 @@ class command_context_factory
     {
     }
 
-    command_context create(const command_context_simple& ctx2) const
+    command_context create(const command_context_simple& ctx2, const std::vector<channel_context>& channels) const
     {
-        const channel_context channel =
-            ctx2.channel_index >= 0 ? static_context_->channels.at(ctx2.channel_index) : channel_context();
-        auto ctx       = command_context(static_context_, ctx2.client, channel, ctx2.channel_index, ctx2.layer_id);
+        const channel_context channel = ctx2.channel_index >= 0 ? channels.at(ctx2.channel_index) : channel_context();
+        auto ctx = command_context(static_context_, channels, ctx2.client, channel, ctx2.channel_index, ctx2.layer_id);
         ctx.parameters = std::move(ctx2.parameters);
         return std::move(ctx);
     }

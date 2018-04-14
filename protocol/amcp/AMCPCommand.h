@@ -48,7 +48,7 @@ class AMCPCommand
 
     typedef std::shared_ptr<AMCPCommand> ptr_type;
 
-    void Execute(bool reply_without_req_id);
+    void Execute(const std::vector<channel_context>& channels, bool reply_without_req_id);
 
     void SendReply(const std::wstring& str) const;
 
@@ -91,11 +91,13 @@ class AMCPGroupCommand
     {
     }
 
-    bool Execute(const std::vector<channel_context>& channels_ctx) const;
+    bool HasClient() const { return !!client_; }
 
     void SendReply(const std::wstring& str) const;
 
     std::wstring name() const;
+
+    std::vector<std::shared_ptr<AMCPCommand>> Commands() const {return commands_;}
 };
 
 }}} // namespace caspar::protocol::amcp

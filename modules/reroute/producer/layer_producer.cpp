@@ -161,7 +161,7 @@ public:
 	{
 		pixel_constraints_.width.set(channel->video_format_desc().width);
 		pixel_constraints_.height.set(channel->video_format_desc().height);
-		channel->stage().add_layer_consumer(this, layer_, consumer_);
+		channel->stage()->add_layer_consumer(this, layer_, consumer_);
 		consumer_->block_until_first_frame_available();
 		double_framerate_ = false;
 		CASPAR_LOG(info) << print() << L" Initialized";
@@ -172,7 +172,7 @@ public:
 		auto channel = channel_.lock();
 
 		if (channel)
-			channel->stage().remove_layer_consumer(this, layer_);
+			channel->stage()->remove_layer_consumer(this, layer_);
 
 		CASPAR_LOG(info) << print() << L" Uninitialized";
 	}

@@ -75,10 +75,10 @@ struct video_channel::impl final
 	caspar::core::output								output_;
 	std::future<void>									output_ready_for_frame_	= make_ready_future();
 	spl::shared_ptr<image_mixer>						image_mixer_;
-	caspar::core::mixer									mixer_;
-	caspar::core::stage									stage_;
+        caspar::core::mixer                                                     mixer_;
+        std::shared_ptr<core::stage>                                           stage_;
 
-	mutable tbb::spin_mutex								tick_listeners_mutex_;
+        mutable tbb::spin_mutex								tick_listeners_mutex_;
 	int64_t												last_tick_listener_id	= 0;
         std::unordered_map<int64_t, std::function<void()>>                                              tick_listeners_;
 
@@ -100,7 +100,7 @@ public:
       , output_(graph_, format_desc, channel_layout, index, timecode_)
       , image_mixer_(std::move(image_mixer))
       , mixer_(index, graph_, image_mixer_)
-      , stage_(index, graph_)
+      , stage_(std::make_shared<core::stage>(index, graph_))
   {
       graph_->set_color("tick-time", caspar::diagnostics::color(0.0f, 0.6f, 0.9f));
 	  graph_->set_color("skipped-schedule", caspar::diagnostics::color(0.3f, 0.6f, 0.6f));
@@ -109,7 +109,7 @@ public:
 
       output_.monitor_output().attach_parent(monitor_subject_);
       mixer_.monitor_output().attach_parent(monitor_subject_);
-      stage_.monitor_output().attach_parent(monitor_subject_);
+      stage_->monitor_output().attach_parent(monitor_subject_);
 
       executor_.begin_invoke([=] { tick(); });
 
@@ -134,7 +134,7 @@ public:
 		lock(format_desc_mutex_, [&]
 		{
 			format_desc_ = format_desc;
-			stage_.clear();
+			stage_->clear();
 		});
 	}
 
@@ -151,7 +151,7 @@ public:
 		lock(channel_layout_mutex_, [&]
 		{
 			channel_layout_ = channel_layout;
-			stage_.clear();
+			stage_->clear();
 		});
 	}
 
@@ -202,7 +202,7 @@ public:
                         
                         // Produce
 
-			auto stage_frames = stage_(format_desc);
+			auto stage_frames = (*stage_)(format_desc);
 
                         // Schedule commands for next timecode
                         invoke_timecode_listeners();
@@ -242,11 +242,11 @@ public:
 		return index_;
 	}
 
-	boost::property_tree::wptree info() const
+	boost::property_tree::wptree info()
 	{
 		boost::property_tree::wptree info;
 
-		auto stage_info  = stage_.info();
+		auto stage_info  = stage_->info();
 		auto mixer_info  = mixer_.info();
 		auto output_info = output_.info();
 
@@ -259,11 +259,11 @@ public:
 		return info;
 	}
 
-	boost::property_tree::wptree delay_info() const
+	boost::property_tree::wptree delay_info()
 	{
 		boost::property_tree::wptree info;
 
-		auto stage_info = stage_.delay_info();
+		auto stage_info = stage_->delay_info();
 		auto mixer_info = mixer_.delay_info();
 		auto output_info = output_.delay_info();
 
@@ -310,10 +310,10 @@ video_channel::video_channel(
 		const core::video_format_desc& format_desc,
 		const core::audio_channel_layout& channel_layout,
 		std::unique_ptr<image_mixer> image_mixer) : impl_(new impl(index, format_desc, channel_layout, std::move(image_mixer))){}
-video_channel::~video_channel(){}
-const stage& video_channel::stage() const { return impl_->stage_;}
-stage& video_channel::stage() { return impl_->stage_;}
-const mixer& video_channel::mixer() const{ return impl_->mixer_;}
+video_channel::~video_channel() {}
+const std::shared_ptr<core::stage>& video_channel::stage() const { return impl_->stage_; }
+std::shared_ptr<core::stage>&       video_channel::stage() { return impl_->stage_; }
+const mixer&                        video_channel::mixer() const { return impl_->mixer_; }
 mixer& video_channel::mixer() { return impl_->mixer_;}
 const output& video_channel::output() const { return impl_->output_;}
 output& video_channel::output() { return impl_->output_;}

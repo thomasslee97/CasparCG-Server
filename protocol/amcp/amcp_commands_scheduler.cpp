@@ -30,7 +30,7 @@ std::wstring time_command(command_context& ctx)
 {
     std::wstringstream replyString;
     replyString << L"201 TIME OK\r\n";
-    replyString << ctx.channel.channel->timecode()->timecode().string();
+    replyString << ctx.channel.raw_channel->timecode()->timecode().string();
     replyString << L"\r\n";
     return replyString.str();
 }
