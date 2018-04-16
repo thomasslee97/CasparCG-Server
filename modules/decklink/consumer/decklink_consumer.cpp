@@ -409,7 +409,7 @@ struct decklink_consumer
     , boost::noncopyable
 {
     const int                                     channel_index_;
-    const std::shared_ptr<core::channel_timecode> channel_timecode_;
+    const std::shared_ptr<core::timecode_provider> channel_timecode_;
     const configuration                           config_;
 
     com_ptr<IDeckLink>                 decklink_      = get_device(config_.device_index);
@@ -453,7 +453,7 @@ struct decklink_consumer
                       const core::video_format_desc&          format_desc,
                       const core::audio_channel_layout&       in_channel_layout,
                       int                                     channel_index,
-                      std::shared_ptr<core::channel_timecode> channel_timecode)
+                      std::shared_ptr<core::timecode_provider> channel_timecode)
         : channel_index_(channel_index)
         , channel_timecode_(channel_timecode)
         , config_(config)
@@ -734,7 +734,7 @@ struct decklink_consumer_proxy : public core::frame_consumer
     void initialize(const core::video_format_desc&          format_desc,
                     const core::audio_channel_layout&       channel_layout,
                     int                                     channel_index,
-                    std::shared_ptr<core::channel_timecode> channel_timecode) override
+                    std::shared_ptr<core::timecode_provider> channel_timecode) override
     {
         format_desc_ = format_desc;
         executor_.invoke([=] {

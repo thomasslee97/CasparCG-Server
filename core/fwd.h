@@ -38,7 +38,7 @@ FORWARD2(caspar, core, class draw_frame);
 FORWARD2(caspar, core, class mutable_frame);
 FORWARD2(caspar, core, class const_frame);
 FORWARD2(caspar, core, struct frame_timecode); // TODO - remove
-FORWARD2(caspar, core, class channel_timecode);
+FORWARD2(caspar, core, class timecode_provider);
 FORWARD2(caspar, core, class video_channel);
 FORWARD2(caspar, core, struct pixel_format_desc);
 FORWARD2(caspar, core, struct media_info_repository);

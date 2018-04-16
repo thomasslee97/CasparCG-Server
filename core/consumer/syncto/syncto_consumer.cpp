@@ -55,7 +55,10 @@ public:
 	{
 	}
 
-	void initialize(const video_format_desc& format_desc, const audio_channel_layout& channel_layout, int channel_index,                    std::shared_ptr<core::channel_timecode> channel_timecode) override
+	void initialize(const video_format_desc&                 format_desc,
+                        const audio_channel_layout&              channel_layout,
+                        int                                      channel_index,
+                        std::shared_ptr<core::timecode_provider> channel_timecode) override
 	{
 		verify_cyclic_reference(channel_index, other_channel_);
 

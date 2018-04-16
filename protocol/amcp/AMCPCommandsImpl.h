@@ -87,8 +87,8 @@ class amcp_command_repository_wrapper
     spl::shared_ptr<core::help_repository> help_repo() const;
 
   private:
-    std::shared_ptr<amcp_command_repository>& repo_;
-    std::shared_ptr<command_context_factory>& ctx_;
+    std::shared_ptr<amcp_command_repository> repo_;
+    std::shared_ptr<command_context_factory> ctx_;
 };
 
 void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo);

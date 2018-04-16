@@ -25,7 +25,9 @@ public:
 		consumer_->monitor_output().attach_parent(monitor_subject_);
 	}
 
-	void change_channel_format(const core::video_format_desc& format_desc, const audio_channel_layout& channel_layout, std::shared_ptr<core::channel_timecode> channel_timecode)
+	void change_channel_format(const core::video_format_desc&           format_desc,
+                                   const audio_channel_layout&              channel_layout,
+                                   std::shared_ptr<core::timecode_provider> channel_timecode)
 	{
 		consumer_->initialize(format_desc, channel_layout, channel_index_, channel_timecode);
 	}
@@ -79,7 +81,7 @@ std::future<bool> port::send(const_frame frame){return impl_->send(std::move(fra
 monitor::subject& port::monitor_output() { return *impl_->monitor_subject_; }
 void              port::change_channel_format(const core::video_format_desc&          format_desc,
                                  const audio_channel_layout&             channel_layout,
-                                 std::shared_ptr<core::channel_timecode> channel_timecode)
+                                 std::shared_ptr<core::timecode_provider> channel_timecode)
 {
     impl_->change_channel_format(format_desc, channel_layout, channel_timecode);
 }

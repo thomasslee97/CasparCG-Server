@@ -39,6 +39,7 @@
 #include <vector>
 
 #include <boost/property_tree/ptree_fwd.hpp>
+#include "timecode_source.h"
 
 FORWARD1(caspar, class executor);
 
@@ -56,7 +57,7 @@ struct constraints
 };
 
 // Interface
-class frame_producer : public interaction_sink
+class frame_producer : public interaction_sink, public timecode_source
 {
 	frame_producer(const frame_producer&);
 	frame_producer& operator=(const frame_producer&);
@@ -111,6 +112,9 @@ public:
 	virtual std::future<std::wstring>			call(const std::vector<std::wstring>& params) override;
 	virtual variable&							get_variable(const std::wstring& name) override;
 	virtual const std::vector<std::wstring>&	get_variables() const override;
+
+        virtual const frame_timecode& timecode() override;
+        virtual bool                 has_timecode() const override;
 
 	// monitor::observable
 

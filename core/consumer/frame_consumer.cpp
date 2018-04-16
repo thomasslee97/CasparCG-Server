@@ -128,7 +128,7 @@ class destroy_consumer_proxy : public frame_consumer
     void              initialize(const video_format_desc&                format_desc,
                                  const audio_channel_layout&             channel_layout,
                                  int                                     channel_index,
-                                 std::shared_ptr<core::channel_timecode> channel_timecode) override
+                                 std::shared_ptr<core::timecode_provider> channel_timecode) override
     {
         return consumer_->initialize(format_desc, channel_layout, channel_index, channel_timecode);
     }
@@ -165,7 +165,7 @@ class print_consumer_proxy : public frame_consumer
     void              initialize(const video_format_desc&    format_desc,
                                  const audio_channel_layout& channel_layout,
                                  int                         channel_index,
-                                 std::shared_ptr<core::channel_timecode> channel_timecode) override
+                                 std::shared_ptr<core::timecode_provider> channel_timecode) override
     {
         consumer_->initialize(format_desc, channel_layout, channel_index, channel_timecode);
         CASPAR_LOG(info) << consumer_->print() << L" Initialized.";
@@ -187,7 +187,7 @@ class recover_consumer_proxy : public frame_consumer
     int                             channel_index_ = -1;
     video_format_desc                       format_desc_;
     audio_channel_layout                    channel_layout_ = audio_channel_layout::invalid();
-    std::shared_ptr<core::channel_timecode> channel_timecode_;
+    std::shared_ptr<core::timecode_provider> channel_timecode_;
 
   public:
     recover_consumer_proxy(spl::shared_ptr<frame_consumer>&& consumer)
@@ -215,7 +215,7 @@ class recover_consumer_proxy : public frame_consumer
     void initialize(const video_format_desc&                format_desc,
                     const audio_channel_layout&             channel_layout,
                     int                                     channel_index,
-                    std::shared_ptr<core::channel_timecode> channel_timecode) override
+                    std::shared_ptr<core::timecode_provider> channel_timecode) override
     {
         format_desc_    = format_desc;
         channel_layout_ = channel_layout;
@@ -254,7 +254,7 @@ class cadence_guard : public frame_consumer
     void initialize(const video_format_desc&                format_desc,
                     const audio_channel_layout&             channel_layout,
                     int                                     channel_index,
-                    std::shared_ptr<core::channel_timecode> channel_timecode) override
+                    std::shared_ptr<core::timecode_provider> channel_timecode) override
     {
         audio_cadence_  = format_desc.audio_cadence;
         sync_buffer_    = boost::circular_buffer<std::size_t>(format_desc.audio_cadence.size());
@@ -344,7 +344,12 @@ const spl::shared_ptr<frame_consumer>& frame_consumer::empty()
     {
       public:
         std::future<bool> send(const_frame) override { return make_ready_future(false); }
-        void              initialize(const video_format_desc&, const audio_channel_layout&, int,                    std::shared_ptr<core::channel_timecode>) override {}
+        void              initialize(const video_format_desc&,
+                                     const audio_channel_layout&,
+                                     int,
+                                     std::shared_ptr<core::timecode_provider>) override
+        {
+        }
         std::wstring      print() const override { return L"empty"; }
         std::wstring      name() const override { return L"empty"; }
         bool              has_synchronization_clock() const override { return false; }

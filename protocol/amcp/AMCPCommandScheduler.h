@@ -32,7 +32,7 @@ class AMCPCommandScheduler
   public:
     AMCPCommandScheduler();
 
-    void add_channel(std::shared_ptr<core::channel_timecode> channel_timecode);
+    void add_channel(std::shared_ptr<core::timecode_provider> channel_timecode);
 
     void set(int                          channel_index,
              const std::wstring&          token,

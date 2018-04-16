@@ -50,6 +50,7 @@
 #include <core/monitor/monitor.h>
 #include <core/producer/frame_producer.h>
 #include <core/producer/framerate/framerate_producer.h>
+#include <core/producer/timecode_source.h>
 
 #include <tbb/concurrent_queue.h>
 
@@ -208,6 +209,8 @@ class decklink_producer
         return S_OK;
     }
 
+    core::frame_timecode last_timecode = core::frame_timecode::get_default();
+
     virtual HRESULT STDMETHODCALLTYPE VideoInputFrameArrived(IDeckLinkVideoInputFrame*  video,
                                                              IDeckLinkAudioInputPacket* audio)
     {
@@ -239,7 +242,7 @@ class decklink_producer
             video_frame->key_frame        = 1;
 
             // TODO - does this want to be a pointer to make it optional? or is this fine?
-            core::frame_timecode timecode;
+            last_timecode = core::frame_timecode::get_default();
 
             // TODO return code
             IDeckLinkTimecode* tc; // TODO - determine type based on video format and give the user some control too.
@@ -247,14 +250,18 @@ class decklink_producer
                 uint8_t hours, minutes, seconds, frames;
                 // TODO - read flags from tc too
                 if (SUCCEEDED(tc->GetComponents(&hours, &minutes, &seconds, &frames))) {
-                    //                    CASPAR_LOG(info) << "Got timecode";
-                    timecode = core::frame_timecode(hours, minutes, seconds, frames, 25); // TODO - fps from in_format_desc_
+                    const uint8_t fps = static_cast<uint8_t>(ceil(in_format_desc_.fps));
+                    last_timecode     = core::frame_timecode(hours, minutes, seconds, frames, fps);
+
+                    // video_frame->pts;
+
+                    monitor_subject_ << core::monitor::message("/file/timecode") % last_timecode.string();
                 }
 
                 BSTR str;
                 if (SUCCEEDED(tc->GetString(&str))) {
-                    //std::wstring ws(str, SysStringLen(str));
-                    //CASPAR_LOG(info) << "Timecode: " << ws;
+                    // std::wstring ws(str, SysStringLen(str));
+                    // CASPAR_LOG(info) << "Timecode: " << ws;
                 }
 
                 tc->Release();
@@ -273,6 +280,7 @@ class decklink_producer
                              << core::monitor::message("/file/audio/format") %
                                     u8(av_get_sample_fmt_name(AV_SAMPLE_FMT_S32))
                              << core::monitor::message("/file/fps") % in_format_desc_.fps;
+
             // TODO - add timecode string to osc
 
             // Audio
@@ -361,6 +369,18 @@ class decklink_producer
     boost::rational<int> get_out_framerate() const { return muxer_.out_framerate(); }
 
     core::monitor::subject& monitor_output() { return monitor_subject_; }
+
+    const core::frame_timecode& timecode()
+    {
+        // return core::frame_timecode::get_default();
+        return last_timecode;
+        // return producer_->timecode();
+    }
+    bool has_timecode() const
+    {
+        return last_timecode != core::frame_timecode::get_default();
+        // return producer_->has_timecode();
+    }
 };
 
 class decklink_producer_proxy : public core::frame_producer_base
@@ -419,6 +439,9 @@ class decklink_producer_proxy : public core::frame_producer_base
     }
 
     boost::rational<int> get_out_framerate() const { return producer_->get_out_framerate(); }
+
+    const core::frame_timecode& timecode() { return producer_->timecode(); }
+    bool                        has_timecode() const { return producer_->has_timecode(); }
 };
 
 void describe_producer(core::help_sink& sink, const core::help_repository& repo)
@@ -495,6 +518,6 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
     auto get_source_framerate = [=] { return producer->get_out_framerate(); };
     auto target_framerate     = dependencies.format_desc.framerate;
 
-	return core::create_destroy_proxy(producer);
+    return core::create_destroy_proxy(producer);
 }
 }} // namespace caspar::decklink

@@ -51,7 +51,7 @@ public:
                   const video_format_desc&                    format_desc,
                   const core::audio_channel_layout&           channel_layout,
                   int                                         channel_index,
-                  std::shared_ptr<core::channel_timecode>     channel_timecode);
+                  std::shared_ptr<core::timecode_provider>    channel_timecode);
 
   // Methods
 

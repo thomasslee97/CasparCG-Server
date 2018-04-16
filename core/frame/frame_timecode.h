@@ -29,6 +29,7 @@ struct frame_timecode
 {
     frame_timecode();
     frame_timecode(uint8_t hours, uint8_t minutes, uint8_t seconds, uint8_t frames, uint8_t fps);
+    frame_timecode(uint32_t frames, uint8_t fps);
 
     uint8_t hours() const { return hours_; }
     uint8_t minutes() const { return minutes_; }
@@ -58,6 +59,7 @@ struct frame_timecode
 
     const std::wstring string() const;
     unsigned int       bcd() const;
+    int64_t            pts() const;
 
   private:
     uint8_t hours_;
@@ -67,26 +69,15 @@ struct frame_timecode
     uint8_t fps_;
 };
 
-// this is mutable, updated by decklink_producer and can return frame_timecode for use by consumers
-class channel_timecode
+class timecode_provider
 {
-  public:
-    explicit channel_timecode()
-        : timecode_(frame_timecode::get_default())
-    {
-    }
+public:
+    virtual ~timecode_provider() = default;
 
-    void           tick();
-    frame_timecode timecode() const { return timecode_; }
-    void           timecode(frame_timecode& tc)
-    { 
-        if (is_free())
-            timecode_ = tc;
-    }
+    virtual frame_timecode timecode() const = 0;
+    virtual void           timecode(frame_timecode& tc) = 0;
 
-    bool is_free() const { return true; } // TODO indicates whether locked to a source eg decklink
-
-  private:
-    frame_timecode timecode_;
+    virtual bool is_free() const = 0;
 };
+
 }} // namespace caspar::core

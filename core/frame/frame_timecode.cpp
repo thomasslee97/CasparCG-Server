@@ -27,7 +27,46 @@
 
 namespace caspar { namespace core {
 
-void channel_timecode::tick() { timecode_ += 1; }
+frame_timecode validate(const frame_timecode& timecode, int delta)
+{
+    const uint8_t fps = 25; // TODO dynamic
+
+    int frames        = timecode.frames() + delta;
+    int delta_seconds = frames / fps;
+    frames %= fps;
+    if (frames < 0) {
+        frames += fps;
+        delta_seconds -= 1;
+    }
+
+    int seconds       = timecode.seconds() + delta_seconds;
+    int delta_minutes = seconds / 60;
+    seconds %= 60;
+    if (seconds < 0) {
+        seconds += 60;
+        delta_minutes -= 1;
+    }
+
+    int minutes     = timecode.minutes() + delta_minutes;
+    int delta_hours = minutes / 60;
+    minutes %= 60;
+    if (minutes < 0) {
+        minutes += 60;
+        delta_hours -= 1;
+    }
+
+    int hours = timecode.hours() + delta_hours;
+    hours %= 24;
+    if (hours < 0) {
+        hours += 24;
+    }
+
+    return frame_timecode(static_cast<uint8_t>(hours),
+                          static_cast<uint8_t>(minutes),
+                          static_cast<uint8_t>(seconds),
+                          static_cast<uint8_t>(frames),
+                          fps);
+}
 
 const std::wstring frame_timecode::string() const
 {
@@ -49,6 +88,26 @@ unsigned int frame_timecode::bcd() const
     return res;
 }
 
+int64_t frame_timecode::pts() const
+{
+    int64_t res = 0;
+    
+    res += hours_;
+    res *= 24;
+
+    res += minutes_;
+    res *= 60;
+
+    res += seconds_;
+    res *= 60;
+
+    res += frames_;
+    res *= 1000;
+    res /= fps_;
+
+    return res;
+}
+
 frame_timecode::frame_timecode()
     : hours_(0)
     , minutes_(0)
@@ -65,6 +124,16 @@ frame_timecode::frame_timecode(uint8_t hours, uint8_t minutes, uint8_t seconds, 
     , frames_(frames)
     , fps_(fps)
 {
+}
+
+frame_timecode::frame_timecode(uint32_t frames, uint8_t fps)
+    : hours_(0)
+    , minutes_(0)
+    , seconds_(0)
+    , frames_(0)
+    , fps_(fps)
+{
+    *this = validate(*this, frames); // TODO - does this work?
 }
 
 const frame_timecode& frame_timecode::get_default()
@@ -162,47 +231,6 @@ bool frame_timecode::operator==(const frame_timecode& other) const
     // TODO - account for framerate
 
     return true;
-}
-
-frame_timecode validate(const frame_timecode& timecode, int delta)
-{
-    const uint8_t fps = 25; // TODO dynamic
-
-    int frames        = timecode.frames() + delta;
-    int delta_seconds = frames / fps;
-    frames %= fps;
-    if (frames < 0) {
-        frames += fps;
-        delta_seconds -= 1;
-    }
-
-    int seconds       = timecode.seconds() + delta_seconds;
-    int delta_minutes = seconds / 60;
-    seconds %= 60;
-    if (seconds < 0) {
-        seconds += 60;
-        delta_minutes -= 1;
-    }
-
-    int minutes     = timecode.minutes() + delta_minutes;
-    int delta_hours = minutes / 60;
-    minutes %= 60;
-    if (minutes < 0) {
-        minutes += 60;
-        delta_hours -= 1;
-    }
-
-    int hours = timecode.hours() + delta_hours;
-    hours %= 24;
-    if (hours < 0) {
-        hours += 24;
-    }
-
-    return frame_timecode(static_cast<uint8_t>(hours),
-                          static_cast<uint8_t>(minutes),
-                          static_cast<uint8_t>(seconds),
-                          static_cast<uint8_t>(frames),
-                          fps);
 }
 
 bool frame_timecode::operator!=(const frame_timecode& other) const { return !((*this) == other); }

@@ -97,7 +97,7 @@ class AMCPScheduledCommand
 class AMCPCommandSchedulerQueue
 {
   public:
-    AMCPCommandSchedulerQueue(std::shared_ptr<core::channel_timecode> channel_timecode)
+    AMCPCommandSchedulerQueue(std::shared_ptr<core::timecode_provider> channel_timecode)
         : channel_timecode_(channel_timecode)
         , scheduled_commands_()
     {
@@ -190,10 +190,10 @@ class AMCPCommandSchedulerQueue
         return res;
     }
 
-    std::shared_ptr<core::channel_timecode> channel_timecode() const { return channel_timecode_; }
+    std::shared_ptr<core::timecode_provider> channel_timecode() const { return channel_timecode_; }
 
   private:
-    std::shared_ptr<core::channel_timecode> channel_timecode_;
+    std::shared_ptr<core::timecode_provider> channel_timecode_;
     // TODO - this should be something sorted. it will make insertion more costly, but then finding and removing
     // items will be a lot cheaper. would increase cost + complexty, and performance may not be an issue
     std::vector<std::shared_ptr<AMCPScheduledCommand>> scheduled_commands_;
@@ -206,7 +206,7 @@ struct AMCPCommandScheduler::Impl
     std::timed_mutex                                        lock_;
 
   public:
-    void add_channel(std::shared_ptr<core::channel_timecode> channel_timecode)
+    void add_channel(std::shared_ptr<core::timecode_provider> channel_timecode)
     {
         queues_.push_back(std::make_shared<AMCPCommandSchedulerQueue>(channel_timecode));
     }
@@ -311,7 +311,7 @@ AMCPCommandScheduler::AMCPCommandScheduler()
 {
 }
 
-void AMCPCommandScheduler::add_channel(std::shared_ptr<core::channel_timecode> channel_timecode)
+void AMCPCommandScheduler::add_channel(std::shared_ptr<core::timecode_provider> channel_timecode)
 {
     impl_->add_channel(channel_timecode);
 }

@@ -88,7 +88,7 @@ struct image_consumer : public core::frame_consumer
     void initialize(const core::video_format_desc&,
                     const core::audio_channel_layout&,
                     int,
-                    std::shared_ptr<core::channel_timecode>) override
+                    std::shared_ptr<core::timecode_provider>) override
     {
     }
 

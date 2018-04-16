@@ -415,6 +415,10 @@ public:
 	bool								collides(double x, double y) const override									{ return producer_->collides(x, y); }
 	void								on_interaction(const interaction_event::ptr& event)	override				{ return producer_->on_interaction(event); }
 	constraints&						pixel_constraints() override												{ return producer_->pixel_constraints(); }
+    
+        const frame_timecode& timecode() override { return frame_timecode::get_default(); }
+        bool                  has_timecode() const override { return false; }
+
 private:
 	std::wstring generate_template_data_xml() const
 	{

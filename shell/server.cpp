@@ -409,7 +409,7 @@ struct server::impl : boost::noncopyable
                                                                 accelerator_.get_ogl_device(),
                                                                 shutdown_server_now_);
 
-        amcp_context_factory_ = std::make_shared<amcp::command_context_factory>(std::move(ctx));
+        amcp_context_factory_ = std::make_shared<amcp::command_context_factory>(ctx);
 
         amcp_command_repo_wrapper_ =
             std::make_shared<amcp::amcp_command_repository_wrapper>(amcp_command_repo_, amcp_context_factory_);
