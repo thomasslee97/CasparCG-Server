@@ -50,7 +50,6 @@
 #include <core/monitor/monitor.h>
 #include <core/producer/frame_producer.h>
 #include <core/producer/framerate/framerate_producer.h>
-#include <core/producer/timecode_source.h>
 
 #include <tbb/concurrent_queue.h>
 
@@ -127,8 +126,9 @@ class decklink_producer
 
     core::constraints constraints_{in_format_desc_.width, in_format_desc_.height};
 
-    tbb::concurrent_bounded_queue<core::draw_frame> frame_buffer_;
-    core::draw_frame                                last_frame_ = core::draw_frame::empty();
+    tbb::concurrent_bounded_queue<std::pair<core::frame_timecode, core::draw_frame>> frame_buffer_;
+    std::pair<core::frame_timecode, core::draw_frame>                                last_frame_ =
+        std::make_pair(core::frame_timecode::get_default(), core::draw_frame::empty());
 
     std::exception_ptr exception_;
 
@@ -209,8 +209,6 @@ class decklink_producer
         return S_OK;
     }
 
-    core::frame_timecode last_timecode = core::frame_timecode::get_default();
-
     virtual HRESULT STDMETHODCALLTYPE VideoInputFrameArrived(IDeckLinkVideoInputFrame*  video,
                                                              IDeckLinkAudioInputPacket* audio)
     {
@@ -242,7 +240,7 @@ class decklink_producer
             video_frame->key_frame        = 1;
 
             // TODO - does this want to be a pointer to make it optional? or is this fine?
-            last_timecode = core::frame_timecode::get_default();
+            auto new_timecode = core::frame_timecode::get_default();
 
             // TODO return code
             IDeckLinkTimecode* tc; // TODO - determine type based on video format and give the user some control too.
@@ -251,11 +249,11 @@ class decklink_producer
                 // TODO - read flags from tc too
                 if (SUCCEEDED(tc->GetComponents(&hours, &minutes, &seconds, &frames))) {
                     const uint8_t fps = static_cast<uint8_t>(ceil(in_format_desc_.fps));
-                    last_timecode     = core::frame_timecode(hours, minutes, seconds, frames, fps);
+                    new_timecode      = core::frame_timecode(hours, minutes, seconds, frames, fps);
 
                     // video_frame->pts;
 
-                    monitor_subject_ << core::monitor::message("/file/timecode") % last_timecode.string();
+                    monitor_subject_ << core::monitor::message("/file/timecode") % new_timecode.string();
                 }
 
                 BSTR str;
@@ -318,11 +316,12 @@ class decklink_producer
             // POLL
 
             for (auto frame = muxer_.poll(); frame != core::draw_frame::empty(); frame = muxer_.poll()) {
-                if (!frame_buffer_.try_push(frame)) {
-                    auto dummy = core::draw_frame::empty();
+                auto val = std::make_pair(new_timecode, frame); // TODO - adjust to account for framerate difference?
+                if (!frame_buffer_.try_push(val)) {
+                    auto dummy = std::make_pair(core::frame_timecode::get_default(), core::draw_frame::empty());
                     frame_buffer_.try_pop(dummy);
 
-                    frame_buffer_.try_push(frame);
+                    frame_buffer_.try_push(val);
 
                     graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
                 }
@@ -347,17 +346,19 @@ class decklink_producer
         if (exception_ != nullptr)
             std::rethrow_exception(exception_);
 
-        core::draw_frame frame = last_frame_;
+        auto frame = last_frame_;
 
-        if (!frame_buffer_.try_pop(frame))
+        if (!frame_buffer_.try_pop(frame)) {
+            last_frame_ = std::make_pair(core::frame_timecode::get_default(), last_frame_.second);
             graph_->set_tag(diagnostics::tag_severity::WARNING, "late-frame");
+        }
         else
             last_frame_ = frame;
 
         graph_->set_value("output-buffer",
                           static_cast<float>(frame_buffer_.size()) / static_cast<float>(frame_buffer_.capacity()));
 
-        return frame;
+        return frame.second;
     }
 
     std::wstring print() const
@@ -370,17 +371,8 @@ class decklink_producer
 
     core::monitor::subject& monitor_output() { return monitor_subject_; }
 
-    const core::frame_timecode& timecode()
-    {
-        // return core::frame_timecode::get_default();
-        return last_timecode;
-        // return producer_->timecode();
-    }
-    bool has_timecode()
-    {
-        return last_timecode != core::frame_timecode::get_default();
-        // return producer_->has_timecode();
-    }
+    const core::frame_timecode& timecode() const { return last_frame_.first; }
+    bool has_timecode() const { return last_frame_.first != core::frame_timecode::get_default(); }
 };
 
 class decklink_producer_proxy : public core::frame_producer_base
@@ -440,8 +432,8 @@ class decklink_producer_proxy : public core::frame_producer_base
 
     boost::rational<int> get_out_framerate() const { return producer_->get_out_framerate(); }
 
-    const core::frame_timecode& timecode() { return producer_->timecode(); }
-    bool                        has_timecode() { return producer_->has_timecode(); }
+    const core::frame_timecode& timecode() override { return producer_->timecode(); }
+    bool                        has_timecode() override { return producer_->has_timecode(); }
 };
 
 void describe_producer(core::help_sink& sink, const core::help_repository& repo)

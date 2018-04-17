@@ -32,7 +32,6 @@
 #include "frame/frame_factory.h"
 #include "mixer/mixer.h"
 #include "producer/stage.h"
-#include "producer/timecode_source.h"
 #include "producer/frame_producer.h"
 
 #include <common/diagnostics/graph.h>
@@ -86,7 +85,8 @@ struct video_channel::impl final
 
     mutable tbb::spin_mutex timecode_listeners_mutex_;
     int64_t                 last_timecode_listener_id = 0;
-    std::unordered_map<int64_t, std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)>> timecode_listeners_;
+    std::unordered_map<int64_t, std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)>>
+        timecode_listeners_;
 
     executor executor_{L"video_channel " + boost::lexical_cast<std::wstring>(index_)};
 
@@ -100,7 +100,7 @@ struct video_channel::impl final
         , format_desc_(format_desc)
         , timecode_(std::make_shared<channel_timecode>(index, format_desc))
         , channel_layout_(channel_layout)
-        , output_(graph_, format_desc, channel_layout, index, timecode_)
+        , output_(graph_, format_desc, channel_layout, index)
         , image_mixer_(std::move(image_mixer))
         , mixer_(index, graph_, image_mixer_)
         , stage_(std::make_shared<core::stage>(index, graph_))
@@ -162,13 +162,13 @@ struct video_channel::impl final
         }
     }
 
-    void invoke_timecode_listeners()
+    void invoke_timecode_listeners(const core::frame_timecode& timecode)
     {
         auto listeners = lock(timecode_listeners_mutex_, [=] { return timecode_listeners_; });
 
         for (auto listener : listeners) {
             try {
-                listener.second(graph_);
+                listener.second(timecode, graph_);
             } catch (...) {
                 CASPAR_LOG_CURRENT_EXCEPTION();
             }
@@ -192,22 +192,19 @@ struct video_channel::impl final
 
             auto stage_frames = (*stage_)(format_desc);
 
-            // Ensure it is accurate from the producer
-            timecode_->tick(); // TODO - this appears to make no difference. should check that
+            // Ensure it is accurate now the producer has run
+            auto timecode = timecode_->tick(); // TODO - this appears to make no difference. should check that
 
             // Schedule commands for next timecode
-            invoke_timecode_listeners();
+            invoke_timecode_listeners(timecode);
 
             // Mix
 
             auto mixed_frame = mixer_(std::move(stage_frames), format_desc, channel_layout);
 
-            *monitor_subject_ 
-                              << monitor::message("/mixed-timecode") % timecode_->timecode().string();
-
             // Consume
 
-            output_ready_for_frame_ = output_(std::move(mixed_frame), format_desc, channel_layout);
+            output_ready_for_frame_ = output_(timecode, std::move(mixed_frame), format_desc, channel_layout);
             output_ready_for_frame_.get();
 
             auto frame_time = frame_timer.elapsed() * format_desc.fps * 0.5;
@@ -216,7 +213,7 @@ struct video_channel::impl final
             *monitor_subject_ << monitor::message("/profiler/time") % frame_timer.elapsed() %
                                      (1.0 / video_format_desc().fps)
                               << monitor::message("/format") % format_desc.name
-                              << monitor::message("/timecode") % timecode_->timecode().string();
+                              << monitor::message("/timecode") % timecode.string();
 
         } catch (...) {
             CASPAR_LOG_CURRENT_EXCEPTION();
@@ -278,7 +275,7 @@ struct video_channel::impl final
     }
 
     std::shared_ptr<void>
-    add_timecode_listener(std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)> listener)
+    add_timecode_listener(std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)> listener)
     {
         return lock(timecode_listeners_mutex_, [&] {
             auto listener_id = last_timecode_listener_id++;
@@ -325,7 +322,7 @@ std::shared_ptr<void>        video_channel::add_tick_listener(std::function<void
     return impl_->add_tick_listener(std::move(listener));
 }
 std::shared_ptr<void>
-video_channel::add_timecode_listener(std::function<void(spl::shared_ptr<caspar::diagnostics::graph>)> listener)
+video_channel::add_timecode_listener(std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)> listener)
 {
     return impl_->add_timecode_listener(std::move(listener));
 }

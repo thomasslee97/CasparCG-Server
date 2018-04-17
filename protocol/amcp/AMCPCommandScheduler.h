@@ -32,7 +32,7 @@ class AMCPCommandScheduler
   public:
     AMCPCommandScheduler();
 
-    void add_channel(std::shared_ptr<core::timecode_provider> channel_timecode);
+    void add_channel();
 
     void set(int                          channel_index,
              const std::wstring&          token,
@@ -47,7 +47,7 @@ class AMCPCommandScheduler
 
     std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> find(const std::wstring& token);
 
-    boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index);
+    boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index, core::frame_timecode timecode);
 
   private:
     struct Impl;

@@ -72,7 +72,7 @@ class timecode_source_proxy : public timecode_source
     bool                           is_valid_;
 };
 
-struct channel_timecode::impl : public timecode_provider
+struct channel_timecode::impl
 {
   public:
     explicit impl(const int index, const video_format_desc& format)
@@ -85,14 +85,14 @@ struct channel_timecode::impl : public timecode_provider
 
     void start() { update_offset(core::frame_timecode::get_default()); }
 
-    void tick()
+    frame_timecode tick()
     {
         if (!is_free()) {
             const frame_timecode tc = source_->timecode();
             if (tc != frame_timecode::get_default() /*&& tc.is_valid()*/) {
                 timecode_ = tc; // TODO - adjust to match fps
                 update_offset(tc);
-                return;
+                return timecode_;
             }
 
             // fall back to incrmenting
@@ -104,11 +104,11 @@ struct channel_timecode::impl : public timecode_provider
         const long millis = (time_now() - clock_offset_) % millis_per_day;
         const long frames = static_cast<long>(round(millis / (1000 / format_.fps)));
 
-        timecode_ = frame_timecode(frames, static_cast<uint8_t>(round(format_.fps)));
+        return timecode_ = frame_timecode(frames, static_cast<uint8_t>(round(format_.fps)));
     }
 
-    frame_timecode timecode() const override { return timecode_; }
-    void           timecode(frame_timecode& tc) override
+    frame_timecode timecode() const { return timecode_; }
+    void           timecode(frame_timecode& tc)
     {
         if (is_free())
             timecode_ = tc;
@@ -121,7 +121,7 @@ struct channel_timecode::impl : public timecode_provider
         // TODO - update current to match fps
     }
 
-    bool is_free() const override { return !(source_ && source_->has_timecode()); }
+    bool is_free() const { return !(source_ && source_->has_timecode()); }
 
     void set_source(std::shared_ptr<core::timecode_source> src) { source_ = src; }
     void set_weak_source(std::shared_ptr<core::timecode_source> src)
@@ -162,7 +162,7 @@ channel_timecode::channel_timecode(int index, const video_format_desc& format)
 }
 
 void channel_timecode::start() { impl_->start(); }
-void channel_timecode::tick() { impl_->tick(); }
+frame_timecode channel_timecode::tick() { return impl_->tick(); }
 
 frame_timecode channel_timecode::timecode() const { return impl_->timecode(); }
 void channel_timecode::timecode(frame_timecode& tc) { impl_->timecode(tc); }

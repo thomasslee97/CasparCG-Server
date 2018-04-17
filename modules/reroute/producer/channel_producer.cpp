@@ -113,7 +113,7 @@ public:
 
 	// frame_consumer
 
-	std::future<bool> send(core::const_frame frame) override
+	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
 		bool pushed = frame_buffer_.try_push(frame);
 
@@ -126,7 +126,7 @@ public:
 	void initialize(
 			const core::video_format_desc& format_desc,
 			const core::audio_channel_layout& channel_layout,
-			int channel_index, std::shared_ptr<core::timecode_provider> channel_timecode) override
+			int channel_index) override
 	{
 		format_desc_    = format_desc;
 		channel_layout_ = channel_layout;

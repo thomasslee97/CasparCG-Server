@@ -673,8 +673,7 @@ public:
 
 	void initialize(const core::video_format_desc&           format_desc,
                         const core::audio_channel_layout&        channel_layout,
-                        int                                      channel_index,
-                        std::shared_ptr<core::timecode_provider> channel_timecode) override
+                        int                                      channel_index) override
 	{
 		format_desc_		= format_desc;
 		in_channel_layout_	= channel_layout;
@@ -696,7 +695,7 @@ public:
 												hardware_output_channel_));
 	}
 
-	std::future<bool> send(core::const_frame frame) override
+	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
 		CASPAR_VERIFY(audio_cadence_.front() * in_channel_layout_.num_channels == static_cast<size_t>(frame.audio_data().size()));
 		boost::range::rotate(audio_cadence_, std::begin(audio_cadence_)+1);

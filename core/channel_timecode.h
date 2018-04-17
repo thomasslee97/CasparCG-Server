@@ -28,21 +28,21 @@
 
 namespace caspar { namespace core {
 
-class channel_timecode : public timecode_provider
+class channel_timecode
 {
   public:
     explicit channel_timecode(int index, const video_format_desc& format);
 
     void start();
 
-    void tick();
+    frame_timecode tick();
 
-    frame_timecode timecode() const override;
-    void           timecode(frame_timecode& tc) override;
+    frame_timecode timecode() const;
+    void           timecode(frame_timecode& tc);
 
     void change_format(const video_format_desc& format);
 
-    bool is_free() const override;
+    bool is_free() const;
 
     void set_source(std::shared_ptr<core::timecode_source> src);
     void set_weak_source(std::shared_ptr<core::timecode_source> src);

@@ -26,16 +26,15 @@ public:
 	}
 
 	void change_channel_format(const core::video_format_desc&           format_desc,
-                                   const audio_channel_layout&              channel_layout,
-                                   std::shared_ptr<core::timecode_provider> channel_timecode)
+                                   const audio_channel_layout&              channel_layout)
 	{
-		consumer_->initialize(format_desc, channel_layout, channel_index_, channel_timecode);
+		consumer_->initialize(format_desc, channel_layout, channel_index_);
 	}
 
-	std::future<bool> send(const_frame frame)
+	std::future<bool> send(frame_timecode timecode, const_frame frame)
 	{
 		*monitor_subject_ << monitor::message("/type") % consumer_->name();
-		return consumer_->send(std::move(frame));
+		return consumer_->send(timecode, std::move(frame));
 	}
 	std::wstring print() const
 	{
@@ -77,13 +76,12 @@ port::port(int index, int channel_index, spl::shared_ptr<frame_consumer> consume
 port::port(port&& other) : impl_(std::move(other.impl_)){}
 port::~port(){}
 port& port::operator=(port&& other){impl_ = std::move(other.impl_); return *this;}
-std::future<bool> port::send(const_frame frame){return impl_->send(std::move(frame));}
+std::future<bool> port::send(frame_timecode timecode, const_frame frame) { return impl_->send(timecode, std::move(frame)); }
 monitor::subject& port::monitor_output() { return *impl_->monitor_subject_; }
 void              port::change_channel_format(const core::video_format_desc&          format_desc,
-                                 const audio_channel_layout&             channel_layout,
-                                 std::shared_ptr<core::timecode_provider> channel_timecode)
+                                 const audio_channel_layout&             channel_layout)
 {
-    impl_->change_channel_format(format_desc, channel_layout, channel_timecode);
+    impl_->change_channel_format(format_desc, channel_layout);
 }
 int                          port::buffer_depth() const { return impl_->buffer_depth(); }
 std::wstring port::print() const{ return impl_->print();}

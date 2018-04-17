@@ -1203,8 +1203,7 @@ public:
 
 	void initialize(const core::video_format_desc&    format_desc,
                         const core::audio_channel_layout& channel_layout,
-                        int,
-                        std::shared_ptr<core::timecode_provider> channel_timecode) override
+                        int) override
 	{
 		if (consumer_)
 			CASPAR_THROW_EXCEPTION(invalid_operation() << msg_info("Cannot reinitialize ffmpeg-consumer."));
@@ -1228,7 +1227,7 @@ public:
 		return consumer_ ? static_cast<int64_t>(consumer_->presentation_frame_age_millis()) : 0;
 	}
 
-	std::future<bool> send(core::const_frame frame) override
+	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
 		bool ready_for_frame = consumer_->ready_for_frame();
 

@@ -57,7 +57,6 @@ struct output::impl
 	spl::shared_ptr<diagnostics::graph>	graph_;
 	spl::shared_ptr<monitor::subject>	monitor_subject_			= spl::make_shared<monitor::subject>("/output");
 	const int							channel_index_;
-        std::shared_ptr<core::timecode_provider>        channel_timecode_;
 	video_format_desc					format_desc_;
 	audio_channel_layout				channel_layout_;
 	std::map<int, port>					ports_;
@@ -69,11 +68,9 @@ public:
         impl(spl::shared_ptr<diagnostics::graph>      graph,
              const video_format_desc&                 format_desc,
              const audio_channel_layout&              channel_layout,
-             int                                      channel_index,
-             std::shared_ptr<core::timecode_provider> channel_timecode)
+             int                                      channel_index)
 		: graph_(std::move(graph))
 		, channel_index_(channel_index)
-        , channel_timecode_(channel_timecode)
 		, format_desc_(format_desc)
 		, channel_layout_(channel_layout)
 	{
@@ -84,7 +81,7 @@ public:
 	{
 		remove(index);
 
-		consumer->initialize(format_desc_, channel_layout_, channel_index_, channel_timecode_);
+		consumer->initialize(format_desc_, channel_layout_, channel_index_);
 
 		executor_.begin_invoke([this, index, consumer]
 		{
@@ -129,7 +126,7 @@ public:
 			{
 				try
 				{
-					it->second.change_channel_format(format_desc, channel_layout, channel_timecode_);
+					it->second.change_channel_format(format_desc, channel_layout);
 					++it;
 				}
 				catch(...)
@@ -166,7 +163,10 @@ public:
 			.any();
 	}
 
-	std::future<void> operator()(const_frame input_frame, const core::video_format_desc& format_desc, const core::audio_channel_layout& channel_layout)
+	std::future<void> operator()(frame_timecode                    timecode,
+                                     const_frame                       input_frame,
+                                     const core::video_format_desc&    format_desc,
+                                     const core::audio_channel_layout& channel_layout)
 	{
 		spl::shared_ptr<caspar::timer> frame_timer;
 
@@ -201,7 +201,7 @@ public:
 
 				try
 				{
-					send_results->insert(std::make_pair(it->first, port.send(frame)));
+					send_results->insert(std::make_pair(it->first, port.send(timecode, frame)));
 					++it;
 				}
 				catch (...)
@@ -209,7 +209,7 @@ public:
 					CASPAR_LOG_CURRENT_EXCEPTION();
 					try
 					{
-						send_results->insert(std::make_pair(it->first, port.send(frame)));
+						send_results->insert(std::make_pair(it->first, port.send(timecode, frame)));
 						++it;
 					}
 					catch (...)
@@ -256,8 +256,7 @@ public:
 			graph_->set_value("consume-time", consume_time * format_desc.fps * 0.5);
 			*monitor_subject_
 				<< monitor::message("/consume_time") % consume_time
-				<< monitor::message("/profiler/time") % consume_time % (1.0 / format_desc.fps)
-				<< monitor::message("/timecode") % channel_timecode_->timecode().string();
+				<< monitor::message("/profiler/time") % consume_time % (1.0 / format_desc.fps);
 		});
 	}
 
@@ -322,9 +321,8 @@ public:
 output::output(spl::shared_ptr<diagnostics::graph>     graph,
                const video_format_desc&                format_desc,
                const core::audio_channel_layout&       channel_layout,
-               int                                     channel_index,
-               std::shared_ptr<core::timecode_provider> channel_timecode)
-    : impl_(new impl(std::move(graph), format_desc, channel_layout, channel_index, channel_timecode))
+               int                                     channel_index)
+    : impl_(new impl(std::move(graph), format_desc, channel_layout, channel_index))
 {
 }
 void output::add(int index, const spl::shared_ptr<frame_consumer>& consumer) { impl_->add(index, consumer); }
@@ -334,6 +332,12 @@ void output::remove(const spl::shared_ptr<frame_consumer>& consumer){impl_->remo
 std::future<boost::property_tree::wptree> output::info() const{return impl_->info();}
 std::future<boost::property_tree::wptree> output::delay_info() const{ return impl_->delay_info(); }
 std::vector<spl::shared_ptr<const frame_consumer>> output::get_consumers() const { return impl_->get_consumers(); }
-std::future<void> output::operator()(const_frame frame, const video_format_desc& format_desc, const core::audio_channel_layout& channel_layout){ return (*impl_)(std::move(frame), format_desc, channel_layout); }
+std::future<void> output::operator()(frame_timecode                    timecode,
+                                     const_frame                       frame,
+                                     const video_format_desc&          format_desc,
+                                     const core::audio_channel_layout& channel_layout)
+{
+    return (*impl_)(timecode, std::move(frame), format_desc, channel_layout);
+}
 monitor::subject& output::monitor_output() {return *impl_->monitor_subject_;}
 }}

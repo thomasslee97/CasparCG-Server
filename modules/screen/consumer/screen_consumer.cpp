@@ -616,8 +616,7 @@ public:
 
         void initialize(const core::video_format_desc& format_desc,
                         const core::audio_channel_layout&,
-                        int                                     channel_index,
-                        std::shared_ptr<core::timecode_provider> channel_timecode) override
+                        int                                     channel_index) override
         {
             consumer_.reset();
             consumer_.reset(new screen_consumer(config_, format_desc, channel_index, sink_));
@@ -628,7 +627,7 @@ public:
 		return consumer_ ? static_cast<int64_t>(consumer_->current_presentation_age_) : 0;
 	}
 
-	std::future<bool> send(core::const_frame frame) override
+	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
 		return consumer_->send(frame);
 	}

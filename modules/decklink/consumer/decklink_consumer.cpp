@@ -409,7 +409,6 @@ struct decklink_consumer
     , boost::noncopyable
 {
     const int                                     channel_index_;
-    const std::shared_ptr<core::timecode_provider> channel_timecode_;
     const configuration                           config_;
 
     com_ptr<IDeckLink>                 decklink_      = get_device(config_.device_index);
@@ -438,7 +437,7 @@ struct decklink_consumer
 
     boost::circular_buffer<std::vector<int32_t>> audio_container_{buffer_size_ + 1};
 
-    tbb::concurrent_bounded_queue<core::const_frame> frame_buffer_;
+    tbb::concurrent_bounded_queue<std::pair<core::frame_timecode, core::const_frame>> frame_buffer_;
     caspar::semaphore                                ready_for_new_frames_{0};
 
     spl::shared_ptr<diagnostics::graph>               graph_;
@@ -452,10 +451,8 @@ struct decklink_consumer
     decklink_consumer(const configuration&                    config,
                       const core::video_format_desc&          format_desc,
                       const core::audio_channel_layout&       in_channel_layout,
-                      int                                     channel_index,
-                      std::shared_ptr<core::timecode_provider> channel_timecode)
+                      int                                     channel_index)
         : channel_index_(channel_index)
-        , channel_timecode_(channel_timecode)
         , config_(config)
         , format_desc_(format_desc)
         , in_channel_layout_(in_channel_layout)
@@ -515,7 +512,7 @@ struct decklink_consumer
     ~decklink_consumer()
     {
         is_running_ = false;
-        frame_buffer_.try_push(core::const_frame::empty());
+        frame_buffer_.try_push(std::make_pair(core::frame_timecode::get_default(), core::const_frame::empty()));
 
         if (output_ != nullptr) {
             output_->StopScheduledPlayback(0, nullptr, 0);
@@ -613,7 +610,7 @@ struct decklink_consumer
                                       (format_desc_.audio_cadence[0] * config_.buffer_depth()));
             }
 
-            auto frame = core::const_frame::empty();
+            auto frame = std::make_pair(core::frame_timecode::get_default(), core::const_frame::empty());
 
             frame_buffer_.pop(frame);
             ready_for_new_frames_.release();
@@ -622,9 +619,9 @@ struct decklink_consumer
                 return E_FAIL;
 
             if (config_.embedded_audio)
-                schedule_next_audio(channel_remapper_.mix_and_rearrange(frame.audio_data()));
+                schedule_next_audio(channel_remapper_.mix_and_rearrange(frame.second.audio_data()));
 
-            schedule_next_video(frame, channel_timecode_->timecode());
+            schedule_next_video(frame.second, frame.first);
         } catch (...) {
             lock(exception_mutex_, [&] { exception_ = std::current_exception(); });
             return E_FAIL;
@@ -669,7 +666,7 @@ struct decklink_consumer
         video_scheduled_ += format_desc_.duration;
     }
 
-    std::future<bool> send(core::const_frame frame)
+    std::future<bool> send(core::frame_timecode timecode, core::const_frame frame)
     {
         auto exception = lock(exception_mutex_, [&] { return exception_; });
 
@@ -679,7 +676,7 @@ struct decklink_consumer
         if (!is_running_)
             CASPAR_THROW_EXCEPTION(caspar_exception() << msg_info(print() + L" Is not running."));
 
-        frame_buffer_.push(frame);
+        frame_buffer_.push(std::make_pair(timecode, frame));
 
         auto send_completion = spl::make_shared<std::promise<bool>>();
 
@@ -733,17 +730,19 @@ struct decklink_consumer_proxy : public core::frame_consumer
 
     void initialize(const core::video_format_desc&          format_desc,
                     const core::audio_channel_layout&       channel_layout,
-                    int                                     channel_index,
-                    std::shared_ptr<core::timecode_provider> channel_timecode) override
+                    int                                     channel_index) override
     {
         format_desc_ = format_desc;
         executor_.invoke([=] {
             consumer_.reset();
-            consumer_.reset(new decklink_consumer<Configuration>(config_, format_desc, channel_layout, channel_index, channel_timecode));
+            consumer_.reset(new decklink_consumer<Configuration>(config_, format_desc, channel_layout, channel_index));
         });
     }
 
-    std::future<bool> send(core::const_frame frame) override { return consumer_->send(frame); }
+    std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
+    {
+        return consumer_->send(timecode, frame);
+    }
 
     std::wstring print() const override { return consumer_ ? consumer_->print() : L"[decklink_consumer]"; }
 

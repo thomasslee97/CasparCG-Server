@@ -55,11 +55,10 @@ public:
 
 	// Methods
 
-        virtual std::future<bool> send(const_frame frame)                                              = 0;
+        virtual std::future<bool> send(frame_timecode timecode, const_frame frame)                                              = 0;
         virtual void              initialize(const video_format_desc&                format_desc,
                                              const audio_channel_layout&             channel_layout,
-                                             int                                     channel_index,
-                                             std::shared_ptr<core::timecode_provider> channel_timecode) = 0;
+                                             int                                     channel_index) = 0;
 
         // monitor::observable
 

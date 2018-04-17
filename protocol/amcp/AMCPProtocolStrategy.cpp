@@ -108,12 +108,11 @@ class AMCPProtocolStrategy
         for (const auto& ch : repo_->channels()) {
             auto queue = spl::make_shared<AMCPCommandQueue>(
                 L"Channel " + boost::lexical_cast<std::wstring>(i + 1) + L" for " + name, repo_->channels());
-            scheduler_->add_channel(ch.raw_channel->timecode());
-            schedule_ops_.push_back(ch.raw_channel->add_timecode_listener([&, i, queue](spl::shared_ptr<caspar::diagnostics::graph> graph) {
-                const auto cmds = scheduler_->schedule(i);
+            scheduler_->add_channel(); // TODO - move to do in bulk
+            schedule_ops_.push_back(ch.raw_channel->add_timecode_listener([&, i, queue](core::frame_timecode timecode, spl::shared_ptr<caspar::diagnostics::graph> graph) {
+                const auto cmds = scheduler_->schedule(i, timecode);
                 if (!cmds) {
-					graph->set_tag(caspar::diagnostics::tag_severity::WARNING, "skipped-schedule");
-                    // TODO - report failed to lock to diag
+                    graph->set_tag(caspar::diagnostics::tag_severity::WARNING, "skipped-schedule");
                     return;
                 }
 

@@ -28,15 +28,14 @@ public:
 
 	port& operator=(port&& other);
 
-	std::future<bool> send(const_frame frame);
+	std::future<bool> send(frame_timecode timecode, const_frame frame);
 
 	monitor::subject& monitor_output();
 
 	// Properties
 
 	void                                  change_channel_format(const video_format_desc&                 format_desc,
-                                                                    const audio_channel_layout&              channel_layout,
-                                                                    std::shared_ptr<core::timecode_provider> channel_timecode);
+                                                                    const audio_channel_layout&              channel_layout);
 	std::wstring print() const;
 	int buffer_depth() const;
 	bool has_synchronization_clock() const;

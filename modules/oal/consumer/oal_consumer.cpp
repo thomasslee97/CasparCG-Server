@@ -158,8 +158,7 @@ public:
 
 	void initialize(const core::video_format_desc&           format_desc,
                         const core::audio_channel_layout&        channel_layout,
-                        int                                      channel_index,
-                        std::shared_ptr<core::timecode_provider> channel_timecode) override
+                        int                                      channel_index) override
 	{
 		format_desc_	= format_desc;
 		channel_index_	= channel_index;
@@ -195,7 +194,7 @@ public:
 		return presentation_age_;
 	}
 
-	std::future<bool> send(core::const_frame frame) override
+	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
 		// Will only block if the default executor queue capacity of 512 is
 		// exhausted, which should not happen

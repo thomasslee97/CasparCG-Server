@@ -66,15 +66,4 @@ struct frame_timecode
     uint8_t fps_;
 };
 
-class timecode_provider
-{
-public:
-    virtual ~timecode_provider() = default;
-
-    virtual frame_timecode timecode() const = 0;
-    virtual void           timecode(frame_timecode& tc) = 0;
-
-    virtual bool is_free() const = 0;
-};
-
 }} // namespace caspar::core

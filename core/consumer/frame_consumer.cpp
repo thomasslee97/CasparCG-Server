@@ -124,13 +124,15 @@ class destroy_consumer_proxy : public frame_consumer
             .detach();
     }
 
-    std::future<bool> send(const_frame frame) override { return consumer_->send(std::move(frame)); }
+    std::future<bool> send(frame_timecode timecode, const_frame frame) override
+    {
+        return consumer_->send(timecode, std::move(frame));
+    }
     void              initialize(const video_format_desc&                format_desc,
                                  const audio_channel_layout&             channel_layout,
-                                 int                                     channel_index,
-                                 std::shared_ptr<core::timecode_provider> channel_timecode) override
+                                 int                                     channel_index) override
     {
-        return consumer_->initialize(format_desc, channel_layout, channel_index, channel_timecode);
+        return consumer_->initialize(format_desc, channel_layout, channel_index);
     }
     std::wstring                 print() const override { return consumer_->print(); }
     std::wstring                 name() const override { return consumer_->name(); }
@@ -161,13 +163,15 @@ class print_consumer_proxy : public frame_consumer
         CASPAR_LOG(info) << str << L" Uninitialized.";
     }
 
-    std::future<bool> send(const_frame frame) override { return consumer_->send(std::move(frame)); }
+    std::future<bool> send(frame_timecode timecode, const_frame frame) override
+    {
+        return consumer_->send(timecode, std::move(frame));
+    }
     void              initialize(const video_format_desc&    format_desc,
                                  const audio_channel_layout& channel_layout,
-                                 int                         channel_index,
-                                 std::shared_ptr<core::timecode_provider> channel_timecode) override
+                                 int                         channel_index) override
     {
-        consumer_->initialize(format_desc, channel_layout, channel_index, channel_timecode);
+        consumer_->initialize(format_desc, channel_layout, channel_index);
         CASPAR_LOG(info) << consumer_->print() << L" Initialized.";
     }
     std::wstring                 print() const override { return consumer_->print(); }
@@ -187,7 +191,6 @@ class recover_consumer_proxy : public frame_consumer
     int                             channel_index_ = -1;
     video_format_desc                       format_desc_;
     audio_channel_layout                    channel_layout_ = audio_channel_layout::invalid();
-    std::shared_ptr<core::timecode_provider> channel_timecode_;
 
   public:
     recover_consumer_proxy(spl::shared_ptr<frame_consumer>&& consumer)
@@ -195,15 +198,15 @@ class recover_consumer_proxy : public frame_consumer
     {
     }
 
-    std::future<bool> send(const_frame frame) override
+    std::future<bool> send(frame_timecode timecode, const_frame frame) override
     {
         try {
-            return consumer_->send(frame);
+            return consumer_->send(timecode, frame);
         } catch (...) {
             CASPAR_LOG_CURRENT_EXCEPTION();
             try {
-                consumer_->initialize(format_desc_, channel_layout_, channel_index_, channel_timecode_);
-                return consumer_->send(frame);
+                consumer_->initialize(format_desc_, channel_layout_, channel_index_);
+                return consumer_->send(timecode, frame);
             } catch (...) {
                 CASPAR_LOG_CURRENT_EXCEPTION();
                 CASPAR_LOG(error) << print() << " Failed to recover consumer.";
@@ -214,15 +217,13 @@ class recover_consumer_proxy : public frame_consumer
 
     void initialize(const video_format_desc&                format_desc,
                     const audio_channel_layout&             channel_layout,
-                    int                                     channel_index,
-                    std::shared_ptr<core::timecode_provider> channel_timecode) override
+                    int                                     channel_index) override
     {
         format_desc_    = format_desc;
         channel_layout_ = channel_layout;
         channel_index_    = channel_index;
-        channel_timecode_ = channel_timecode;
 
-        return consumer_->initialize(format_desc, channel_layout, channel_index, channel_timecode);
+        return consumer_->initialize(format_desc, channel_layout, channel_index);
     }
 
     std::wstring                 print() const override { return consumer_->print(); }
@@ -253,27 +254,26 @@ class cadence_guard : public frame_consumer
 
     void initialize(const video_format_desc&                format_desc,
                     const audio_channel_layout&             channel_layout,
-                    int                                     channel_index,
-                    std::shared_ptr<core::timecode_provider> channel_timecode) override
+                    int                                     channel_index) override
     {
         audio_cadence_  = format_desc.audio_cadence;
         sync_buffer_    = boost::circular_buffer<std::size_t>(format_desc.audio_cadence.size());
         format_desc_    = format_desc;
         channel_layout_ = channel_layout;
-        consumer_->initialize(format_desc, channel_layout, channel_index, channel_timecode);
+        consumer_->initialize(format_desc, channel_layout, channel_index);
     }
 
-    std::future<bool> send(const_frame frame) override
+    std::future<bool> send(frame_timecode timecode, const_frame frame) override
     {
         if (audio_cadence_.size() == 1)
-            return consumer_->send(frame);
+            return consumer_->send(timecode, frame);
 
         std::future<bool> result = make_ready_future(true);
 
         if (boost::range::equal(sync_buffer_, audio_cadence_) &&
             audio_cadence_.front() * channel_layout_.num_channels == static_cast<int>(frame.audio_data().size())) {
             // Audio sent so far is in sync, now we can send the next chunk.
-            result = consumer_->send(frame);
+            result = consumer_->send(timecode, frame);
             boost::range::rotate(audio_cadence_, std::begin(audio_cadence_) + 1);
         } else
             CASPAR_LOG(trace) << print() << L" Syncing audio.";
@@ -343,11 +343,10 @@ const spl::shared_ptr<frame_consumer>& frame_consumer::empty()
     class empty_frame_consumer : public frame_consumer
     {
       public:
-        std::future<bool> send(const_frame) override { return make_ready_future(false); }
+        std::future<bool> send(frame_timecode, const_frame) override { return make_ready_future(false); }
         void              initialize(const video_format_desc&,
                                      const audio_channel_layout&,
-                                     int,
-                                     std::shared_ptr<core::timecode_provider>) override
+                                     int) override
         {
         }
         std::wstring      print() const override { return L"empty"; }

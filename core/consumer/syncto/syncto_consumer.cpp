@@ -57,8 +57,7 @@ public:
 
 	void initialize(const video_format_desc&                 format_desc,
                         const audio_channel_layout&              channel_layout,
-                        int                                      channel_index,
-                        std::shared_ptr<core::timecode_provider> channel_timecode) override
+                        int                                      channel_index) override
 	{
 		verify_cyclic_reference(channel_index, other_channel_);
 
@@ -69,7 +68,7 @@ public:
 		});
 	}
 
-	std::future<bool> send(const_frame frame) override
+	std::future<bool> send(frame_timecode timecode, const_frame frame) override
 	{
 		auto task = spl::make_shared<std::packaged_task<bool ()>>([=] { return true; });
 

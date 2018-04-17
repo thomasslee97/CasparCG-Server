@@ -135,6 +135,7 @@ std::wstring schedule_set_command(command_context& ctx)
     return L"202 SCHEDULE SET OK\r\n";
 }
 
+    // TODO - refactor this
 std::future<std::wstring> timecode_command(command_context& ctx)
 {
     if (boost::iequals(ctx.parameters.at(0), L"CLOCK")) {
@@ -150,7 +151,7 @@ std::future<std::wstring> timecode_command(command_context& ctx)
         const int layer = boost::lexical_cast<int>(ctx.parameters.at(1));
         const auto producer = ctx.channel.stage->foreground(layer).share();
 
-        return std::async(std::launch::async, [=]() -> std::wstring
+        return std::async(std::launch::async, [=]() -> std::wstring // TODO - this does not want to be async, or deferred. it could be executed by the stage thread?
         {
             ctx.channel.raw_channel->timecode()->set_weak_source(producer.get());
             return L"202 TIMECODE SOURCE OK\r\n";

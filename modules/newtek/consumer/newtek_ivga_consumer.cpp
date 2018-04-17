@@ -86,8 +86,7 @@ public:
 	virtual void initialize(
 			const core::video_format_desc& format_desc,
 			const core::audio_channel_layout& channel_layout,
-                                int                                      channel_index,
-                                std::shared_ptr<core::timecode_provider> channel_timecode) override
+                                int                                      channel_index) override
 	{
 		air_send_.reset(
 			airsend::create(
@@ -133,7 +132,7 @@ public:
 		});
 	}
 
-	virtual std::future<bool> send(core::const_frame frame) override
+	virtual std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
 		CASPAR_VERIFY(format_desc_.height * format_desc_.width * 4 == frame.image_data().size());
 
