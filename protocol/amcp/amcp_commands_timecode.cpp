@@ -136,34 +136,31 @@ std::wstring schedule_set_command(command_context& ctx)
 }
 
     // TODO - refactor this
-std::future<std::wstring> timecode_command(command_context& ctx)
+std::wstring timecode_command(command_context& ctx)
 {
     if (boost::iequals(ctx.parameters.at(0), L"CLOCK")) {
         ctx.channel.raw_channel->timecode()->set_system_time();
         
-        return make_ready_future<std::wstring>(L"202 TIMECODE SOURCE OK\r\n");
+        return L"202 TIMECODE SOURCE OK\r\n";
     }
     if (boost::iequals(ctx.parameters.at(0), L"LAYER")) {
         if (ctx.parameters.size() < 2) {
-            return make_ready_future<std::wstring>(L"202 TIMECODE SOURCE OK\r\n");
+            return L"202 TIMECODE SOURCE OK\r\n";
         }
 
         const int layer = boost::lexical_cast<int>(ctx.parameters.at(1));
         const auto producer = ctx.channel.stage->foreground(layer).share();
+        ctx.channel.stage->execute([=]() { ctx.channel.raw_channel->timecode()->set_weak_source(producer.get()); });
 
-        return std::async(std::launch::async, [=]() -> std::wstring // TODO - this does not want to be async, or deferred. it could be executed by the stage thread?
-        {
-            ctx.channel.raw_channel->timecode()->set_weak_source(producer.get());
-            return L"202 TIMECODE SOURCE OK\r\n";
-        });
+        return L"202 TIMECODE SOURCE OK\r\n";
     }
     if (boost::iequals(ctx.parameters.at(0), L"CLEAR")) {
         ctx.channel.raw_channel->timecode()->clear_source();
 
-        return make_ready_future<std::wstring>(L"202 TIMECODE SOURCE OK\r\n");
+        return L"202 TIMECODE SOURCE OK\r\n";
     }
 
-    return make_ready_future<std::wstring>(L"400 TIMECODE SOURCE FAILED\r\n");
+    return L"400 TIMECODE SOURCE FAILED\r\n";
 }
 
 void register_timecode_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)

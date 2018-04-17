@@ -86,32 +86,33 @@ struct stage::impl : public std::enable_shared_from_this<impl>
 
         caspar::timer frame_timer;
 
-        auto frames = executor_.invoke([=]() -> std::map<int, draw_frame> {
+        auto frames = executor_.invoke(
+            [=]() -> std::map<int, draw_frame> {
 
-            std::map<int, draw_frame> frames;
+                std::map<int, draw_frame> frames;
 
-            try {
-                std::vector<int> indices;
+                try {
+                    std::vector<int> indices;
 
-                for (auto& layer : layers_) {
-                    // Prevent race conditions in parallel for each later
-                    frames[layer.first] = draw_frame::empty();
-                    tweens_[layer.first];
-                    layer_consumers_[layer.first];
+                    for (auto& layer : layers_) {
+                        // Prevent race conditions in parallel for each later
+                        frames[layer.first] = draw_frame::empty();
+                        tweens_[layer.first];
+                        layer_consumers_[layer.first];
 
-                    indices.push_back(layer.first);
+                        indices.push_back(layer.first);
+                    }
+
+                    aggregator_.translate_and_send();
+
+                    tbb::parallel_for_each(
+                        indices.begin(), indices.end(), [&](int index) { draw(index, format_desc, frames); });
+                } catch (...) {
+                    layers_.clear();
+                    CASPAR_LOG_CURRENT_EXCEPTION();
                 }
 
-                aggregator_.translate_and_send();
-
-                tbb::parallel_for_each(
-                    indices.begin(), indices.end(), [&](int index) { draw(index, format_desc, frames); });
-            } catch (...) {
-                layers_.clear();
-                CASPAR_LOG_CURRENT_EXCEPTION();
-            }
-
-            return frames;
+                return frames;
             },
             task_priority::higher_priority);
 
@@ -488,9 +489,13 @@ monitor::subject&                stage::monitor_output() { return *impl_->monito
 void stage::on_interaction(const interaction_event::ptr& event) { impl_->on_interaction(event); }
 std::unique_lock<std::mutex> stage::get_lock() const { return impl_->get_lock(); }
 
+std::future<void> stage::execute(std::function<void()> func) { 
+    func();
+    return make_ready_future();
+}
+
 // STAGE 2
 
-// TODO store st
 stage_delayed::stage_delayed(std::shared_ptr<stage>& st)
     : executor_(L"TEST")
     , stage_(st)
@@ -506,10 +511,11 @@ std::future<void> stage_delayed::apply_transforms(const std::vector<stage_delaye
 {
     return executor_.begin_invoke([=]() { return stage_->apply_transforms(transforms).get(); });
 }
-std::future<void> stage_delayed::apply_transform(int                                                                index,
-                                          const std::function<core::frame_transform(core::frame_transform)>& transform,
-                                          unsigned int   mix_duration,
-                                          const tweener& tween)
+std::future<void>
+stage_delayed::apply_transform(int                                                                index,
+                               const std::function<core::frame_transform(core::frame_transform)>& transform,
+                               unsigned int                                                       mix_duration,
+                               const tweener&                                                     tween)
 {
     return executor_.begin_invoke(
         [=]() { return stage_->apply_transform(index, transform, mix_duration, tween).get(); });
@@ -527,14 +533,11 @@ std::future<frame_transform> stage_delayed::get_current_transform(int index)
     return executor_.begin_invoke([=]() { return stage_->get_current_transform(index).get(); });
 }
 std::future<void> stage_delayed::load(int                                    index,
-                               const spl::shared_ptr<frame_producer>& producer,
-                               bool                                   preview,
-                               const boost::optional<int32_t>&        auto_play_delta)
+                                      const spl::shared_ptr<frame_producer>& producer,
+                                      bool                                   preview,
+                                      const boost::optional<int32_t>&        auto_play_delta)
 {
-    return executor_.begin_invoke([=]()
-    {
-        return stage_->load(index, producer, preview, auto_play_delta).get();
-    });
+    return executor_.begin_invoke([=]() { return stage_->load(index, producer, preview, auto_play_delta).get(); });
 }
 std::future<void> stage_delayed::pause(int index)
 {
@@ -600,5 +603,10 @@ std::future<boost::property_tree::wptree> stage_delayed::delay_info()
 std::future<boost::property_tree::wptree> stage_delayed::delay_info(int index)
 {
     return executor_.begin_invoke([=]() -> boost::property_tree::wptree { return stage_->delay_info(index).get(); });
+}
+
+std::future<void> stage_delayed::execute(std::function<void()> func)
+{
+    return executor_.begin_invoke([=]() { return stage_->execute(func).get(); });
 }
 }} // namespace caspar::core

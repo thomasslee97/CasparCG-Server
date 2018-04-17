@@ -239,10 +239,8 @@ class decklink_producer
             video_frame->top_field_first  = in_format_desc_.field_mode == core::field_mode::upper ? 1 : 0;
             video_frame->key_frame        = 1;
 
-            // TODO - does this want to be a pointer to make it optional? or is this fine?
             auto new_timecode = core::frame_timecode::get_default();
 
-            // TODO return code
             IDeckLinkTimecode* tc; // TODO - determine type based on video format and give the user some control too.
             if (SUCCEEDED(video->GetTimecode(BMDTimecodeFormat::bmdTimecodeRP188Any, &tc)) && tc) {
                 uint8_t hours, minutes, seconds, frames;
@@ -251,15 +249,7 @@ class decklink_producer
                     const uint8_t fps = static_cast<uint8_t>(ceil(in_format_desc_.fps));
                     new_timecode      = core::frame_timecode(hours, minutes, seconds, frames, fps);
 
-                    // video_frame->pts;
-
                     monitor_subject_ << core::monitor::message("/file/timecode") % new_timecode.string();
-                }
-
-                BSTR str;
-                if (SUCCEEDED(tc->GetString(&str))) {
-                    // std::wstring ws(str, SysStringLen(str));
-                    // CASPAR_LOG(info) << "Timecode: " << ws;
                 }
 
                 tc->Release();
@@ -278,8 +268,6 @@ class decklink_producer
                              << core::monitor::message("/file/audio/format") %
                                     u8(av_get_sample_fmt_name(AV_SAMPLE_FMT_S32))
                              << core::monitor::message("/file/fps") % in_format_desc_.fps;
-
-            // TODO - add timecode string to osc
 
             // Audio
 

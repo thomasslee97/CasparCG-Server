@@ -185,7 +185,8 @@ struct video_channel::impl final
 
             caspar::timer frame_timer;
 
-            // We tick now, and the timecode producer will reset it if it got data
+            // Predict the new timecode for any producers to use
+
             timecode_->tick();
 
             // Produce
@@ -193,7 +194,7 @@ struct video_channel::impl final
             auto stage_frames = (*stage_)(format_desc);
 
             // Ensure it is accurate now the producer has run
-            auto timecode = timecode_->tick(); // TODO - this appears to make no difference. should check that
+            auto timecode = timecode_->tick();
 
             // Schedule commands for next timecode
             invoke_timecode_listeners(timecode);

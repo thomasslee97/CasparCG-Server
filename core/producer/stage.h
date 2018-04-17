@@ -91,6 +91,8 @@ class stage_base : public interaction_sink
 
     virtual std::future<boost::property_tree::wptree> delay_info()          = 0;
     virtual std::future<boost::property_tree::wptree> delay_info(int layer) = 0;
+
+    virtual std::future<void> execute(std::function<void()> k) = 0;
 };
 
 /**
@@ -163,6 +165,8 @@ class stage : public stage_base
     std::future<boost::property_tree::wptree> delay_info() override;
     std::future<boost::property_tree::wptree> delay_info(int layer) override;
 
+    std::future<void> execute(std::function<void()> k) override;
+
     std::unique_lock<std::mutex> get_lock() const;
 
   private:
@@ -227,6 +231,8 @@ class stage_delayed final : public stage_base
 
     std::future<boost::property_tree::wptree> delay_info() override;
     std::future<boost::property_tree::wptree> delay_info(int layer) override;
+
+    std::future<void> execute(std::function<void()> k) override;
 
   private:
     std::promise<void>      waiter_;
