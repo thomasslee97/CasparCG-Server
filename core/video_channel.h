@@ -32,6 +32,7 @@
 #include <boost/property_tree/ptree_fwd.hpp>
 
 #include "frame/frame_timecode.h"
+#include "channel_timecode.h"
 #include <functional>
 
 namespace caspar { namespace core {
@@ -79,7 +80,7 @@ class video_channel final
     boost::property_tree::wptree delay_info() const;
     int                          index() const;
 
-    std::shared_ptr<core::timecode_provider> timecode() const;
+    std::shared_ptr<core::channel_timecode> timecode() const;
 
   private:
     struct impl;

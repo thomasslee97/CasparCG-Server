@@ -26,7 +26,7 @@
 #endif
 
 #include "AMCPCommandsImpl.h"
-#include "amcp_commands_scheduler.h"
+#include "amcp_commands_timecode.h"
 
 #include "AMCPCommandQueue.h"
 #include "amcp_command_repository.h"
@@ -3327,7 +3327,7 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     //  repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"REQ", req_describer);
     //    repo->help_repo()->register_item({L"AMCP", L"Protocol Commands"}, L"PING", ping_describer);
 
-    register_scheduler_commands(repo);
+    register_timecode_commands(repo);
 }
 
 }}} // namespace caspar::protocol::amcp

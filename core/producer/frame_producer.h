@@ -114,7 +114,7 @@ public:
 	virtual const std::vector<std::wstring>&	get_variables() const override;
 
         virtual const frame_timecode& timecode() override;
-        virtual bool                 has_timecode() const override;
+        virtual bool                 has_timecode() override;
 
 	// monitor::observable
 

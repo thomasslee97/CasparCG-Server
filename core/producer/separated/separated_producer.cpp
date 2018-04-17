@@ -110,7 +110,7 @@ class separated_producer : public frame_producer_base
     monitor::subject& monitor_output() { return *monitor_subject_; }
 
     const frame_timecode& timecode() override { return fill_producer_->timecode(); }
-    bool                  has_timecode() const override { return fill_producer_->has_timecode(); }
+    bool                  has_timecode() override { return fill_producer_->has_timecode(); }
 };
 
 spl::shared_ptr<frame_producer> create_separated_producer(const spl::shared_ptr<frame_producer>& fill,

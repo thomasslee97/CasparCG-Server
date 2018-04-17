@@ -256,7 +256,8 @@ public:
 			graph_->set_value("consume-time", consume_time * format_desc.fps * 0.5);
 			*monitor_subject_
 				<< monitor::message("/consume_time") % consume_time
-				<< monitor::message("/profiler/time") % consume_time % (1.0 / format_desc.fps);
+				<< monitor::message("/profiler/time") % consume_time % (1.0 / format_desc.fps)
+				<< monitor::message("/timecode") % channel_timecode_->timecode().string();
 		});
 	}
 

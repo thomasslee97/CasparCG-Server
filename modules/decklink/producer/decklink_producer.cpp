@@ -376,7 +376,7 @@ class decklink_producer
         return last_timecode;
         // return producer_->timecode();
     }
-    bool has_timecode() const
+    bool has_timecode()
     {
         return last_timecode != core::frame_timecode::get_default();
         // return producer_->has_timecode();
@@ -441,7 +441,7 @@ class decklink_producer_proxy : public core::frame_producer_base
     boost::rational<int> get_out_framerate() const { return producer_->get_out_framerate(); }
 
     const core::frame_timecode& timecode() { return producer_->timecode(); }
-    bool                        has_timecode() const { return producer_->has_timecode(); }
+    bool                        has_timecode() { return producer_->has_timecode(); }
 };
 
 void describe_producer(core::help_sink& sink, const core::help_repository& repo)

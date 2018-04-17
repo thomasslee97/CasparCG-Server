@@ -22,7 +22,12 @@
 #pragma once
 
 #include "amcp_command_context.h"
-#include "amcp_commands_scheduler.h"
+#include "amcp_commands_timecode.h"
+#include "core/producer/timecode_source.h"
+#include "core/producer/frame_producer.h"
+
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 
 namespace caspar { namespace protocol { namespace amcp {
 
@@ -30,8 +35,7 @@ std::wstring time_command(command_context& ctx)
 {
     const auto ch = ctx.channel.raw_channel->timecode();
 
-    if (ctx.parameters.size() > 0) 
-    {
+    if (ctx.parameters.size() > 0) {
         if (!ch->is_free())
             return L"4xx TIME FAILED\r\n";
 
@@ -85,8 +89,8 @@ std::wstring schedule_list_command(command_context& ctx)
 
 std::wstring schedule_info_command(command_context& ctx)
 {
-    const auto token    = ctx.parameters.at(0);
-    const auto info = ctx.static_context->scheduler->find(token);
+    const auto token = ctx.parameters.at(0);
+    const auto info  = ctx.static_context->scheduler->find(token);
 
     if (info.first == core::frame_timecode::get_default() || !info.second) {
         return L"403 SCHEDULE INFO ERROR\r\n";
@@ -110,7 +114,8 @@ std::wstring schedule_set_command(command_context& ctx)
     }
 
     const std::list<std::wstring> tokens(ctx.parameters.begin() + 2, ctx.parameters.end());
-    std::shared_ptr<AMCPCommand> command = ctx.static_context->parser->parse_command(ctx.client, tokens, schedule_token);
+    std::shared_ptr<AMCPCommand>  command =
+        ctx.static_context->parser->parse_command(ctx.client, tokens, schedule_token);
     if (!command) {
         return L"403 SCHEDULE SET ERROR\r\n";
     }
@@ -130,13 +135,45 @@ std::wstring schedule_set_command(command_context& ctx)
     return L"202 SCHEDULE SET OK\r\n";
 }
 
-void register_scheduler_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
+std::future<std::wstring> timecode_command(command_context& ctx)
+{
+    if (boost::iequals(ctx.parameters.at(0), L"CLOCK")) {
+        ctx.channel.raw_channel->timecode()->set_system_time();
+        
+        return make_ready_future<std::wstring>(L"202 TIMECODE SOURCE OK\r\n");
+    }
+    if (boost::iequals(ctx.parameters.at(0), L"LAYER")) {
+        if (ctx.parameters.size() < 2) {
+            return make_ready_future<std::wstring>(L"202 TIMECODE SOURCE OK\r\n");
+        }
+
+        const int layer = boost::lexical_cast<int>(ctx.parameters.at(1));
+        const auto producer = ctx.channel.stage->foreground(layer).share();
+
+        return std::async(std::launch::async, [=]() -> std::wstring
+        {
+            ctx.channel.raw_channel->timecode()->set_weak_source(producer.get());
+            return L"202 TIMECODE SOURCE OK\r\n";
+        });
+    }
+    if (boost::iequals(ctx.parameters.at(0), L"CLEAR")) {
+        ctx.channel.raw_channel->timecode()->clear_source();
+
+        return make_ready_future<std::wstring>(L"202 TIMECODE SOURCE OK\r\n");
+    }
+
+    return make_ready_future<std::wstring>(L"400 TIMECODE SOURCE FAILED\r\n");
+}
+
+void register_timecode_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
 {
     repo->register_command(L"Scheduler Commands", L"SCHEDULE REMOVE", nullptr, schedule_remove_command, 1);
     repo->register_command(L"Scheduler Commands", L"SCHEDULE CLEAR", nullptr, schedule_clear_command, 0);
     repo->register_command(L"Scheduler Commands", L"SCHEDULE LIST", nullptr, schedule_list_command, 0);
     repo->register_command(L"Scheduler Commands", L"SCHEDULE INFO", nullptr, schedule_info_command, 1);
     repo->register_command(L"Scheduler Commands", L"SCHEDULE SET", nullptr, schedule_set_command, 3);
+
+    repo->register_channel_command(L"Timecode Commands", L"TIMECODE SOURCE", nullptr, timecode_command, 1);
 
     repo->register_channel_command(L"Query Commands", L"TIME", nullptr, time_command, 0);
 }

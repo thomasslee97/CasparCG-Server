@@ -21,7 +21,6 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 
 namespace caspar { namespace core {
 
@@ -41,8 +40,6 @@ struct frame_timecode
 
     static const frame_timecode& get_default();
     static bool                  parse_string(const std::wstring& str, frame_timecode& res);
-
-    //    static const frame_timecode& from_int(uint64_t frame_count, const struct pixel_format_desc* format);
 
     bool operator<(const frame_timecode& other) const;
     bool operator>(const frame_timecode& other) const;

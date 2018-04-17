@@ -6,7 +6,7 @@ set(SOURCES
 		amcp/AMCPCommandQueue.cpp
 		amcp/AMCPCommandScheduler.cpp
 		amcp/AMCPCommandsImpl.cpp
-		amcp/amcp_commands_scheduler.cpp
+		amcp/amcp_commands_timecode.cpp
 		amcp/AMCPProtocolStrategy.cpp
 		amcp/amcp_command_repository.cpp
 
@@ -37,7 +37,7 @@ set(HEADERS
 		amcp/AMCPCommandQueue.h
 		amcp/AMCPCommandScheduler.h
 		amcp/AMCPCommandsImpl.h
-		amcp/amcp_commands_scheduler.h
+		amcp/amcp_commands_timecode.h
 		amcp/AMCPProtocolStrategy.h
 		amcp/amcp_command_repository.h
 		amcp/amcp_shared.h

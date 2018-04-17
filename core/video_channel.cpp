@@ -56,128 +56,6 @@
 
 namespace caspar { namespace core {
 
-class clock_timecode_source : public timecode_source
-{
-  public:
-    clock_timecode_source(const video_format_desc& format)
-        : format_(format)
-    {
-    }
-
-    // TODO timezone
-    // TODO offset?
-
-    // TODO - change format
-
-    const frame_timecode& timecode() override
-    {
-        static long millis_per_day = 1000 * 60 * 60 * 24;
-
-        using namespace std::chrono;
-        // TODO - convert to local time
-        const long millis =
-            duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() % millis_per_day;
-        const long frames = static_cast<long>(round(millis / (1000 / format_.fps)));
-
-        return last_timecode_ = frame_timecode(frames, static_cast<uint8_t>(ceil(format_.fps)));
-    }
-
-    bool has_timecode() const override { return true; }
-
-    video_format_desc format_;
-    frame_timecode    last_timecode_;
-};
-
-class timecode_source_proxy : public timecode_source
-{
-  public:
-    timecode_source_proxy(const std::shared_ptr<timecode_source>& src)
-        : src_(src)
-    {
-    }
-
-    const frame_timecode& timecode() override
-    {
-        const std::shared_ptr<timecode_source> src = src_.lock();
-        if (src)
-            return src->timecode();
-
-        return frame_timecode::get_default();
-    }
-
-    bool has_timecode() const override
-    {
-        const std::shared_ptr<timecode_source> src = src_.lock();
-        if (src)
-            return src->has_timecode();
-
-        return false;
-    }
-
-    std::weak_ptr<timecode_source> src_;
-};
-
-class channel_timecode : public timecode_provider
-{
-  public:
-    explicit channel_timecode(const video_format_desc& format)
-        : timecode_(frame_timecode::get_default())
-        , format_(format)
-    {
-    }
-
-    void start() { timer_.restart(); }
-
-    void tick()
-    {
-        const double elapsed = timer_.elapsed();
-        timer_.restart();
-
-        if (!is_free()) {
-            const frame_timecode tc = source_->timecode();
-            if (tc != frame_timecode::get_default() /*&& tc.is_valid()*/) {
-                timecode_ = tc; // TODO - adjust to match fps
-                return;
-            }
-
-            // fall back to incrmenting
-            CASPAR_LOG(warning) << L"Channel timecode invalid. Ignoring";
-        }
-
-        timecode_ += static_cast<int>(round(elapsed / format_.fps));
-    }
-
-    frame_timecode timecode() const override { return timecode_; }
-    void           timecode(frame_timecode& tc) override
-    {
-        if (is_free())
-            timecode_ = tc;
-    }
-
-    void change_format(const video_format_desc& format)
-    {
-        format_ = format;
-
-        // TODO - update current to match fps
-    }
-
-    bool is_free() const override { return !(source_ && source_->has_timecode()); }
-
-    void set_source(std::shared_ptr<core::timecode_source> src) { source_ = src; }
-    void set_weak_source(std::shared_ptr<core::timecode_source> src)
-    {
-        source_ = std::make_shared<timecode_source_proxy>(src);
-    }
-    void clear_source() { source_ = nullptr; }
-
-  private:
-    frame_timecode    timecode_;
-    timer             timer_;
-    video_format_desc format_;
-
-    std::shared_ptr<core::timecode_source> source_; // TODO - this needs some lock
-};
-
 struct video_channel::impl final
 {
     spl::shared_ptr<monitor::subject> monitor_subject_;
@@ -220,7 +98,7 @@ struct video_channel::impl final
         : monitor_subject_(spl::make_shared<monitor::subject>("/channel/" + boost::lexical_cast<std::string>(index)))
         , index_(index)
         , format_desc_(format_desc)
-        , timecode_(std::make_shared<channel_timecode>(format_desc)) // TODO - initial value?
+        , timecode_(std::make_shared<channel_timecode>(index, format_desc))
         , channel_layout_(channel_layout)
         , output_(graph_, format_desc, channel_layout, index, timecode_)
         , image_mixer_(std::move(image_mixer))
@@ -236,6 +114,7 @@ struct video_channel::impl final
         mixer_.monitor_output().attach_parent(monitor_subject_);
         stage_->monitor_output().attach_parent(monitor_subject_);
 
+        executor_.begin_invoke([=] { timecode_->start(); });
         executor_.begin_invoke([=] { tick(); });
 
         CASPAR_LOG(info) << print() << " Successfully Initialized.";
@@ -298,9 +177,6 @@ struct video_channel::impl final
 
     void tick()
     {
-        timecode_->start();
-        //timecode_->set_source(std::make_shared<clock_timecode_source>(format_desc_));
-
         try {
             invoke_tick_listeners();
 
@@ -311,18 +187,13 @@ struct video_channel::impl final
 
             // We tick now, and the timecode producer will reset it if it got data
             timecode_->tick();
-            // TODO - use system clock if required
 
             // Produce
 
             auto stage_frames = (*stage_)(format_desc);
 
-            /*if (timecode_->is_free()) 
-            {
-                auto src = stage_->foreground(10).get();
-                if (src)
-                    timecode_->set_weak_source(src);
-            }*/
+            // Ensure it is accurate from the producer
+            timecode_->tick(); // TODO - this appears to make no difference. should check that
 
             // Schedule commands for next timecode
             invoke_timecode_listeners();
@@ -330,6 +201,9 @@ struct video_channel::impl final
             // Mix
 
             auto mixed_frame = mixer_(std::move(stage_frames), format_desc, channel_layout);
+
+            *monitor_subject_ 
+                              << monitor::message("/mixed-timecode") % timecode_->timecode().string();
 
             // Consume
 
@@ -455,6 +329,6 @@ video_channel::add_timecode_listener(std::function<void(spl::shared_ptr<caspar::
 {
     return impl_->add_timecode_listener(std::move(listener));
 }
-std::shared_ptr<core::timecode_provider> video_channel::timecode() const { return impl_->timecode_; }
+std::shared_ptr<core::channel_timecode> video_channel::timecode() const { return impl_->timecode_; }
 
 }} // namespace caspar::core

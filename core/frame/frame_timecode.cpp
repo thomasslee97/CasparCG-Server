@@ -93,19 +93,19 @@ int64_t frame_timecode::pts() const
     int64_t res = 0;
     
     res += hours_;
-    res *= 24;
+    res *= 60;
 
     res += minutes_;
     res *= 60;
 
     res += seconds_;
-    res *= 60;
-
-    res += frames_;
     res *= 1000;
-    res /= fps_;
 
-    return res;
+    int64_t ms = frames_;
+    if (fps_ != 0)
+        ms *= 1000 / fps_;
+
+    return res + ms;
 }
 
 frame_timecode::frame_timecode()

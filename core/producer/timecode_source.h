@@ -31,7 +31,7 @@ class timecode_source
     virtual ~timecode_source() = default;
 
     virtual const frame_timecode& timecode() = 0;
-    virtual bool has_timecode() const = 0;
+    virtual bool has_timecode() = 0;
 };
 
 }}

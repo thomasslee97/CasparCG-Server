@@ -159,7 +159,7 @@ const std::vector<std::wstring>& frame_producer_base::get_variables() const
 }
 
 const frame_timecode& frame_producer_base::timecode() { return frame_timecode::get_default(); }
-bool frame_producer_base::has_timecode() const { return false; }
+bool frame_producer_base::has_timecode() { return false; }
 
 const spl::shared_ptr<frame_producer>& frame_producer::empty()
 {
@@ -197,7 +197,7 @@ const spl::shared_ptr<frame_producer>& frame_producer::empty()
         }
 
         const frame_timecode& timecode() override { return frame_timecode::get_default(); }
-        bool                  has_timecode() const override { return false; }
+        bool                  has_timecode() override { return false; }
 
         boost::property_tree::wptree info() const override
         {
@@ -304,7 +304,7 @@ class destroy_producer_proxy : public frame_producer
     constraints& pixel_constraints() override { return producer_->pixel_constraints(); }
 
     const frame_timecode& timecode() override { return producer_->timecode(); }
-    bool                  has_timecode() const override { return producer_->has_timecode(); }
+    bool                  has_timecode() override { return producer_->has_timecode(); }
 };
 
 spl::shared_ptr<core::frame_producer> create_destroy_proxy(spl::shared_ptr<core::frame_producer> producer)

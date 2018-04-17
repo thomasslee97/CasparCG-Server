@@ -59,6 +59,7 @@ set(SOURCES
 		thumbnail_generator.cpp
 		video_channel.cpp
 		video_format.cpp
+		channel_timecode.cpp
 )
 set(HEADERS
 		consumer/syncto/syncto_consumer.h
@@ -129,6 +130,7 @@ set(HEADERS
 		producer/binding.h
 		producer/cg_proxy.h
 		producer/frame_producer.h
+		producer/timecode_source.h
 		producer/layer.h
 		producer/stage.h
 		producer/variable.h
@@ -140,6 +142,7 @@ set(HEADERS
 		thumbnail_generator.h
 		video_channel.h
 		video_format.h
+		channel_timecode.h
 )
 
 add_library(core ${SOURCES} ${HEADERS})
