@@ -70,7 +70,7 @@ frame_timecode validate(const frame_timecode& timecode, int delta)
 
 const std::wstring frame_timecode::string() const
 {
-    return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours_ % minutes_ % seconds_ % frames_).str();
+    return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours_ % minutes_ % seconds_ % frames_).str(); // TODO frames format
 }
 
 unsigned int frame_timecode::bcd() const
@@ -83,7 +83,8 @@ unsigned int frame_timecode::bcd() const
     res <<= 8;
     res += ((seconds_ / 10) << 4) + (seconds_ % 10);
     res <<= 8;
-    res += ((frames_ / 10) << 4) + (frames_ % 10);
+    const uint8_t fr = frames_small();
+    res += ((fr / 10) << 4) + (fr % 10);
 
     return res;
 }

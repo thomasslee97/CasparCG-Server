@@ -192,23 +192,19 @@ class decklink_timecode : public IDeckLinkTimecode
     HRESULT
     GetComponents(unsigned char* hours, unsigned char* minutes, unsigned char* seconds, unsigned char* frames) override
     {
-        /* TODO - fix
-        hours   = &timecode_.hours();
-        minutes = &timecode_.minutes;
-        seconds = &timecode_.seconds;
-        frames  = &timecode_.frames;
-        */
+        *hours   = timecode_.hours();
+        *minutes = timecode_.minutes();
+        *seconds = timecode_.seconds();
+        *frames  = timecode_.frames_small();
+
         return S_OK;
     }
 
-    HRESULT GetString(BSTR* timecode) override
-    {
-        return S_FALSE; // TODO
-    }
+    HRESULT GetString(BSTR* timecode) override { return S_FALSE; }
 
-    BMDTimecodeFlags GetFlags() override { return flags_; } // TODO
+    BMDTimecodeFlags GetFlags() override { return flags_; }
 
-    HRESULT GetTimecodeUserBits(BMDTimecodeUserBits* userBits) override { return 0; } // TODO
+    HRESULT GetTimecodeUserBits(BMDTimecodeUserBits* userBits) override { return 0; }
 };
 
 class decklink_frame : public IDeckLinkVideoFrame
@@ -408,8 +404,8 @@ struct decklink_consumer
     : public IDeckLinkVideoOutputCallback
     , boost::noncopyable
 {
-    const int                                     channel_index_;
-    const configuration                           config_;
+    const int           channel_index_;
+    const configuration config_;
 
     com_ptr<IDeckLink>                 decklink_      = get_device(config_.device_index);
     com_iface_ptr<IDeckLinkOutput>     output_        = iface_cast<IDeckLinkOutput>(decklink_);
@@ -438,7 +434,7 @@ struct decklink_consumer
     boost::circular_buffer<std::vector<int32_t>> audio_container_{buffer_size_ + 1};
 
     tbb::concurrent_bounded_queue<std::pair<core::frame_timecode, core::const_frame>> frame_buffer_;
-    caspar::semaphore                                ready_for_new_frames_{0};
+    caspar::semaphore                                                                 ready_for_new_frames_{0};
 
     spl::shared_ptr<diagnostics::graph>               graph_;
     caspar::timer                                     tick_timer_;
@@ -448,10 +444,10 @@ struct decklink_consumer
     std::unique_ptr<key_video_context<Configuration>> key_context_;
 
   public:
-    decklink_consumer(const configuration&                    config,
-                      const core::video_format_desc&          format_desc,
-                      const core::audio_channel_layout&       in_channel_layout,
-                      int                                     channel_index)
+    decklink_consumer(const configuration&              config,
+                      const core::video_format_desc&    format_desc,
+                      const core::audio_channel_layout& in_channel_layout,
+                      int                               channel_index)
         : channel_index_(channel_index)
         , config_(config)
         , format_desc_(format_desc)
@@ -728,9 +724,9 @@ struct decklink_consumer_proxy : public core::frame_consumer
 
     // frame_consumer
 
-    void initialize(const core::video_format_desc&          format_desc,
-                    const core::audio_channel_layout&       channel_layout,
-                    int                                     channel_index) override
+    void initialize(const core::video_format_desc&    format_desc,
+                    const core::audio_channel_layout& channel_layout,
+                    int                               channel_index) override
     {
         format_desc_ = format_desc;
         executor_.invoke([=] {

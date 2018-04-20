@@ -34,6 +34,12 @@ struct frame_timecode
     uint8_t minutes() const { return minutes_; }
     uint8_t seconds() const { return seconds_; }
     uint8_t frames() const { return frames_; }
+    uint8_t frames_small() const
+    {
+        if (fps_ > 30)
+            return frames_ / 2;
+        return frames_;
+    }
     uint8_t fps() const { return fps_; }
 
     bool is_valid() const { return fps_ != 0; }
