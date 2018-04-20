@@ -110,8 +110,10 @@ struct channel_timecode::impl
     frame_timecode timecode() const { return timecode_; }
     void           timecode(frame_timecode& tc)
     {
-        if (is_free())
+        if (is_free()) {
+            update_offset(tc);
             timecode_ = tc;
+        }
     }
 
     void change_format(const video_format_desc& format)
@@ -137,10 +139,7 @@ struct channel_timecode::impl
     }
 
   private:
-    void update_offset(core::frame_timecode tc)
-    {
-        clock_offset_ = time_now() - tc.pts();
-    }
+    void update_offset(core::frame_timecode tc) { clock_offset_ = time_now() - tc.pts(); }
 
     int64_t time_now() const
     {
@@ -161,11 +160,11 @@ channel_timecode::channel_timecode(int index, const video_format_desc& format)
 {
 }
 
-void channel_timecode::start() { impl_->start(); }
+void           channel_timecode::start() { impl_->start(); }
 frame_timecode channel_timecode::tick() { return impl_->tick(); }
 
 frame_timecode channel_timecode::timecode() const { return impl_->timecode(); }
-void channel_timecode::timecode(frame_timecode& tc) { impl_->timecode(tc); }
+void           channel_timecode::timecode(frame_timecode& tc) { impl_->timecode(tc); }
 
 void channel_timecode::change_format(const video_format_desc& format) { impl_->change_format(format); }
 

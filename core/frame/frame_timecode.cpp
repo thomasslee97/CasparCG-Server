@@ -70,7 +70,8 @@ frame_timecode validate(const frame_timecode& timecode, int delta)
 
 const std::wstring frame_timecode::string() const
 {
-    return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours_ % minutes_ % seconds_ % frames_).str(); // TODO frames format
+    return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours_ % minutes_ % seconds_ % frames_)
+        .str(); // TODO frames format
 }
 
 unsigned int frame_timecode::bcd() const
@@ -89,10 +90,10 @@ unsigned int frame_timecode::bcd() const
     return res;
 }
 
-int64_t frame_timecode::pts() const
+uint32_t frame_timecode::total_frames() const
 {
-    int64_t res = 0;
-    
+    uint32_t res = 0;
+
     res += hours_;
     res *= 60;
 
@@ -100,13 +101,27 @@ int64_t frame_timecode::pts() const
     res *= 60;
 
     res += seconds_;
+    res *= fps_;
+
+    res += frames_;
+
+    return res;
+}
+
+uint32_t frame_timecode::max_frames() const
+{
+    static uint32_t num_seconds = 24 * 60 * 60;
+
+    return num_seconds * fps_ - 1;
+}
+
+int64_t frame_timecode::pts() const
+{
+    int64_t res = total_frames();
     res *= 1000;
+    res /= fps_;
 
-    int64_t ms = frames_;
-    if (fps_ != 0)
-        ms *= 1000 / fps_;
-
-    return res + ms;
+    return res;
 }
 
 frame_timecode::frame_timecode()
@@ -212,8 +227,8 @@ bool frame_timecode::operator>(const frame_timecode& other) const
     return false;
 }
 
-bool frame_timecode::operator<=(const frame_timecode& other) const { return other > *this; }
-bool frame_timecode::operator>=(const frame_timecode& other) const { return other < *this; }
+bool frame_timecode::operator<=(const frame_timecode& other) const { return !(*this > other); }
+bool frame_timecode::operator>=(const frame_timecode& other) const { return !(*this < other); }
 
 bool frame_timecode::operator==(const frame_timecode& other) const
 {

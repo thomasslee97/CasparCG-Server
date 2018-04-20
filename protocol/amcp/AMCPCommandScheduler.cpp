@@ -57,7 +57,10 @@ class AMCPScheduledCommand
     {
         // TODO - account for dst/clock changing?
 
-        // TODO account for 24 hour wrap around problem
+        // Range crosses wrap point
+        if (first_tc > last_tc)
+            return timecode_ <= last_tc || timecode_ >= first_tc;
+
         return timecode_ <= last_tc && timecode_ >= first_tc;
     }
 
@@ -99,6 +102,7 @@ class AMCPCommandSchedulerQueue
   public:
     AMCPCommandSchedulerQueue()
         : scheduled_commands_()
+        , last_timecode_(core::frame_timecode::get_default())
     {
     }
 
@@ -107,7 +111,6 @@ class AMCPCommandSchedulerQueue
         if (!command || token.empty() || timecode == core::frame_timecode::get_default())
             return;
 
-        // TODO - optimise once queue type has changed
         for (auto cmd : scheduled_commands_) {
             if (cmd->timecode() != timecode)
                 continue;
@@ -170,16 +173,30 @@ class AMCPCommandSchedulerQueue
         return std::make_pair(core::frame_timecode::get_default(), nullptr);
     }
 
+    std::pair<core::frame_timecode, core::frame_timecode> find_range(const core::frame_timecode& timecode) const
+    {
+        // if fps mismatch, then go with one frame
+        if (last_timecode_.fps() != timecode.fps())
+            return std::make_pair(timecode, timecode + 1);
+        
+        return std::make_pair(last_timecode_, timecode + 1);
+    }
+
     std::vector<std::shared_ptr<AMCPGroupCommand>> schedule(const core::frame_timecode& timecode)
     {
         std::vector<std::shared_ptr<AMCPGroupCommand>> res;
-        const core::frame_timecode                     last_tc  = timecode + 1;
-        const core::frame_timecode                     first_tc = timecode - (10 * last_tc.fps());
 
-        // TODO - optimise once queue type has changed
+        if (scheduled_commands_.size() == 0) {
+            last_timecode_ = timecode;
+            return res;
+        }
+
+        const std::pair<core::frame_timecode, core::frame_timecode> range = find_range(timecode);
+        last_timecode_                                                    = timecode;
+
         for (int i = 0; i < scheduled_commands_.size(); i++) {
             const auto cmd = scheduled_commands_[i];
-            if (cmd->should_schedule(first_tc, last_tc)) {
+            if (cmd->should_schedule(range.first, range.second)) {
                 res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
                 --i;
@@ -190,9 +207,8 @@ class AMCPCommandSchedulerQueue
     }
 
   private:
-    // TODO - this should be something sorted. it will make insertion more costly, but then finding and removing
-    // items will be a lot cheaper. would increase cost + complexty, and performance may not be an issue
     std::vector<std::shared_ptr<AMCPScheduledCommand>> scheduled_commands_;
+    core::frame_timecode                               last_timecode_;
 };
 
 struct AMCPCommandScheduler::Impl
@@ -287,7 +303,8 @@ struct AMCPCommandScheduler::Impl
         bool is_locked() const { return locked_; }
     };
 
-    boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int channel_index, const core::frame_timecode& timecode)
+    boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int                         channel_index,
+                                                                             const core::frame_timecode& timecode)
     {
         // TODO - tweak this timeout
         // Timeout on lock aquiring. This is to stop channel output stalling
@@ -304,8 +321,7 @@ AMCPCommandScheduler::AMCPCommandScheduler()
 {
 }
 
-void AMCPCommandScheduler::add_channel()
-{ impl_->add_channel(); }
+void AMCPCommandScheduler::add_channel() { impl_->add_channel(); }
 
 void AMCPCommandScheduler::set(int                          channel_index,
                                const std::wstring&          token,

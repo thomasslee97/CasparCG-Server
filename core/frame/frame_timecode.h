@@ -44,6 +44,9 @@ struct frame_timecode
 
     bool is_valid() const { return fps_ != 0; }
 
+    uint32_t total_frames() const;
+    uint32_t max_frames() const;
+
     static const frame_timecode& get_default();
     static bool                  parse_string(const std::wstring& str, frame_timecode& res);
 
