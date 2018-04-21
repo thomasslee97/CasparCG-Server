@@ -3158,68 +3158,6 @@ void ping_describer(core::help_sink& sink, const core::help_repository& repo)
                  L"<< PONG abcdef123");
 }
 
-void amcp_command_repository_wrapper::register_command(std::wstring              category,
-                                                       std::wstring              name,
-                                                       core::help_item_describer describer,
-                                                       amcp_command_impl_func    command,
-                                                       int                       min_num_params)
-{
-    std::shared_ptr<command_context_factory> ctx3 = ctx_;
-    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
-        auto ctx2 = ctx3->create(ctx, channels);
-        return command(ctx2);
-    };
-
-    repo_->register_command(category, name, describer, func, min_num_params);
-}
-
-void amcp_command_repository_wrapper::register_command(std::wstring              category,
-                                                       std::wstring              name,
-                                                       core::help_item_describer describer,
-                                                       amcp_command_impl_func2   command,
-                                                       int                       min_num_params)
-{
-    std::shared_ptr<command_context_factory> ctx3 = ctx_;
-    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
-        auto ctx2 = ctx3->create(ctx, channels);
-        return make_ready_future(command(ctx2));
-    };
-
-    repo_->register_command(category, name, describer, func, min_num_params);
-}
-
-void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
-                                                               std::wstring              name,
-                                                               core::help_item_describer describer,
-                                                               amcp_command_impl_func    command,
-                                                               int                       min_num_params)
-{
-    std::shared_ptr<command_context_factory> ctx3 = ctx_;
-    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
-        auto ctx2 = ctx3->create(ctx, channels);
-        return command(ctx2);
-    };
-
-    repo_->register_channel_command(category, name, describer, func, min_num_params);
-}
-
-void amcp_command_repository_wrapper::register_channel_command(std::wstring              category,
-                                                               std::wstring              name,
-                                                               core::help_item_describer describer,
-                                                               amcp_command_impl_func2   command,
-                                                               int                       min_num_params)
-{
-    std::shared_ptr<command_context_factory> ctx3 = ctx_;
-    auto func = [ctx3, command](const command_context_simple& ctx, const std::vector<channel_context>& channels) {
-        auto ctx2 = ctx3->create(ctx, channels);
-        return make_ready_future(command(ctx2));
-    };
-
-    repo_->register_channel_command(category, name, describer, func, min_num_params);
-}
-
-spl::shared_ptr<core::help_repository> amcp_command_repository_wrapper::help_repo() const { return repo_->help_repo(); }
-
 void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
 {
     repo->register_channel_command(L"Basic Commands", L"LOADBG", loadbg_describer, loadbg_command, 1);

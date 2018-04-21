@@ -9,6 +9,7 @@ set(SOURCES
 		amcp/amcp_commands_timecode.cpp
 		amcp/AMCPProtocolStrategy.cpp
 		amcp/amcp_command_repository.cpp
+		amcp/amcp_command_repository_wrapper.cpp
 
 		cii/CIICommandsImpl.cpp
 		cii/CIIProtocolStrategy.cpp
@@ -40,6 +41,7 @@ set(HEADERS
 		amcp/amcp_commands_timecode.h
 		amcp/AMCPProtocolStrategy.h
 		amcp/amcp_command_repository.h
+		amcp/amcp_command_repository_wrapper.h
 		amcp/amcp_shared.h
 		amcp/amcp_command_context.h
 
