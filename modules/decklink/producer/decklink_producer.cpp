@@ -128,7 +128,7 @@ class decklink_producer
 
     tbb::concurrent_bounded_queue<std::pair<core::frame_timecode, core::draw_frame>> frame_buffer_;
     std::pair<core::frame_timecode, core::draw_frame>                                last_frame_ =
-        std::make_pair(core::frame_timecode::get_default(), core::draw_frame::empty());
+        std::make_pair(core::frame_timecode::empty(), core::draw_frame::empty());
 
     std::exception_ptr exception_;
 
@@ -239,7 +239,7 @@ class decklink_producer
             video_frame->top_field_first  = in_format_desc_.field_mode == core::field_mode::upper ? 1 : 0;
             video_frame->key_frame        = 1;
 
-            auto new_timecode = core::frame_timecode::get_default();
+            auto new_timecode = core::frame_timecode::empty();
 
             IDeckLinkTimecode* tc; // TODO - determine type based on video format and give the user some control too.
             if (SUCCEEDED(video->GetTimecode(BMDTimecodeFormat::bmdTimecodeRP188Any, &tc)) && tc) {
@@ -247,9 +247,9 @@ class decklink_producer
                 // TODO - read flags from tc too
                 if (SUCCEEDED(tc->GetComponents(&hours, &minutes, &seconds, &frames))) {
                     const uint8_t fps = static_cast<uint8_t>(ceil(in_format_desc_.fps));
-                    new_timecode      = core::frame_timecode(hours, minutes, seconds, frames, fps);
-
-                    monitor_subject_ << core::monitor::message("/file/timecode") % new_timecode.string();
+                    if (core::frame_timecode::create(hours, minutes, seconds, frames, fps, new_timecode)) 
+                        monitor_subject_ << core::monitor::message("/file/timecode") % new_timecode.string();
+                        
                 }
 
                 tc->Release();
@@ -306,7 +306,7 @@ class decklink_producer
             for (auto frame = muxer_.poll(); frame != core::draw_frame::empty(); frame = muxer_.poll()) {
                 auto val = std::make_pair(new_timecode, frame); // TODO - adjust to account for framerate difference?
                 if (!frame_buffer_.try_push(val)) {
-                    auto dummy = std::make_pair(core::frame_timecode::get_default(), core::draw_frame::empty());
+                    auto dummy = std::make_pair(core::frame_timecode::empty(), core::draw_frame::empty());
                     frame_buffer_.try_pop(dummy);
 
                     frame_buffer_.try_push(val);
@@ -337,7 +337,7 @@ class decklink_producer
         auto frame = last_frame_;
 
         if (!frame_buffer_.try_pop(frame)) {
-            last_frame_ = std::make_pair(core::frame_timecode::get_default(), last_frame_.second);
+            last_frame_ = std::make_pair(core::frame_timecode::empty(), last_frame_.second);
             graph_->set_tag(diagnostics::tag_severity::WARNING, "late-frame");
         }
         else
@@ -360,7 +360,7 @@ class decklink_producer
     core::monitor::subject& monitor_output() { return monitor_subject_; }
 
     const core::frame_timecode& timecode() const { return last_frame_.first; }
-    bool has_timecode() const { return last_frame_.first != core::frame_timecode::get_default(); }
+    bool has_timecode() const { return last_frame_.first != core::frame_timecode::empty(); }
 };
 
 class decklink_producer_proxy : public core::frame_producer_base

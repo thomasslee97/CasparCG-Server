@@ -53,17 +53,6 @@ class AMCPScheduledCommand
         return res;
     }
 
-    bool should_schedule(const core::frame_timecode& first_tc, const core::frame_timecode& last_tc) const
-    {
-        // TODO - account for dst/clock changing?
-
-        // Range crosses wrap point
-        if (first_tc > last_tc)
-            return timecode_ <= last_tc || timecode_ >= first_tc;
-
-        return timecode_ <= last_tc && timecode_ >= first_tc;
-    }
-
     std::shared_ptr<AMCPGroupCommand> create_command() const
     {
         std::vector<std::shared_ptr<AMCPCommand>> cmds;
@@ -102,13 +91,13 @@ class AMCPCommandSchedulerQueue
   public:
     AMCPCommandSchedulerQueue()
         : scheduled_commands_()
-        , last_timecode_(core::frame_timecode::get_default())
+        , last_timecode_(core::frame_timecode::empty())
     {
     }
 
     void set(const std::wstring& token, const core::frame_timecode& timecode, std::shared_ptr<AMCPCommand> command)
     {
-        if (!command || token.empty() || timecode == core::frame_timecode::get_default())
+        if (!command || token.empty() || timecode == core::frame_timecode::empty())
             return;
 
         for (auto cmd : scheduled_commands_) {
@@ -150,7 +139,7 @@ class AMCPCommandSchedulerQueue
     {
         std::vector<std::pair<core::frame_timecode, std::wstring>> res;
 
-        const bool include_all = timecode == core::frame_timecode::get_default();
+        const bool include_all = timecode == core::frame_timecode::empty();
 
         for (auto command : scheduled_commands_) {
             for (auto token : command->get_tokens()) {
@@ -170,7 +159,7 @@ class AMCPCommandSchedulerQueue
                 return std::make_pair(command->timecode(), cmd);
         }
 
-        return std::make_pair(core::frame_timecode::get_default(), nullptr);
+        return std::make_pair(core::frame_timecode::empty(), nullptr);
     }
 
     std::pair<core::frame_timecode, core::frame_timecode> find_range(const core::frame_timecode& timecode) const
@@ -196,7 +185,7 @@ class AMCPCommandSchedulerQueue
 
         for (int i = 0; i < scheduled_commands_.size(); i++) {
             const auto cmd = scheduled_commands_[i];
-            if (cmd->should_schedule(range.first, range.second)) {
+            if (cmd->timecode().is_between(range.first, range.second)) {
                 res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
                 --i;
@@ -279,11 +268,11 @@ struct AMCPCommandScheduler::Impl
 
         for (auto queue : queues_) {
             const auto res = queue->find(token);
-            if (res.first != core::frame_timecode::get_default())
+            if (res.first != core::frame_timecode::empty())
                 return res;
         }
 
-        return std::make_pair(core::frame_timecode::get_default(), nullptr);
+        return std::make_pair(core::frame_timecode::empty(), nullptr);
     }
 
     class timeout_lock

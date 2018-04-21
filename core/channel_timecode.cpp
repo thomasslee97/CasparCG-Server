@@ -42,7 +42,7 @@ class timecode_source_proxy : public timecode_source
     const frame_timecode& timecode() override
     {
         if (!is_valid_)
-            return frame_timecode::get_default();
+            return frame_timecode::empty();
 
         const std::shared_ptr<timecode_source> src = src_.lock();
         if (src)
@@ -50,7 +50,7 @@ class timecode_source_proxy : public timecode_source
 
         CASPAR_LOG(warning) << get_name(index_) << L" Lost timecode source";
         is_valid_ = false;
-        return frame_timecode::get_default();
+        return frame_timecode::empty();
     }
 
     bool has_timecode() override
@@ -76,20 +76,20 @@ struct channel_timecode::impl
 {
   public:
     explicit impl(const int index, const video_format_desc& format)
-        : timecode_(frame_timecode::get_default())
+        : timecode_(frame_timecode(0, static_cast<uint8_t>(round(format.fps))))
         , format_(format)
         , index_(index)
         , clock_offset_(0)
     {
     }
 
-    void start() { update_offset(core::frame_timecode::get_default()); }
+    void start() { update_offset(core::frame_timecode::empty()); }
 
     frame_timecode tick()
     {
         if (!is_free()) {
             const frame_timecode tc = source_->timecode();
-            if (tc != frame_timecode::get_default() /*&& tc.is_valid()*/) {
+            if (tc.is_valid()) {
                 timecode_ = tc; // TODO - adjust to match fps
                 update_offset(tc);
                 return timecode_;

@@ -40,7 +40,8 @@ std::wstring time_command(command_context& ctx)
             return L"4xx TIME FAILED\r\n";
 
         core::frame_timecode tc;
-        if (!core::frame_timecode::parse_string(ctx.parameters.at(0), tc))
+        const uint8_t        fps = static_cast<uint8_t>(round(ctx.channel.raw_channel->video_format_desc().fps));
+        if (!core::frame_timecode::parse_string(ctx.parameters.at(0), fps, tc))
             return L"4xx TIME FAILED\r\n";
 
         ch->timecode(tc);
@@ -71,8 +72,8 @@ std::wstring schedule_clear_command(command_context& ctx)
 
 std::wstring schedule_list_command(command_context& ctx)
 {
-    auto timecode = core::frame_timecode::get_default();
-    if (!ctx.parameters.empty() && !core::frame_timecode::parse_string(ctx.parameters.at(0), timecode)) {
+    auto timecode = core::frame_timecode::empty();
+    if (!ctx.parameters.empty()) {// && !core::frame_timecode::parse_string(ctx.parameters.at(0), fps, timecode)) { // TODO - fix this
         return L"403 SCHEDULE LIST ERROR\r\n";
     }
 
@@ -92,7 +93,7 @@ std::wstring schedule_info_command(command_context& ctx)
     const auto token = ctx.parameters.at(0);
     const auto info  = ctx.static_context->scheduler->find(token);
 
-    if (info.first == core::frame_timecode::get_default() || !info.second) {
+    if (info.first == core::frame_timecode::empty() || !info.second) {
         return L"403 SCHEDULE INFO ERROR\r\n";
     }
 
@@ -106,13 +107,7 @@ std::wstring schedule_info_command(command_context& ctx)
 std::wstring schedule_set_command(command_context& ctx)
 {
     std::wstring schedule_token = ctx.parameters.at(0);
-
-    core::frame_timecode schedule_timecode = core::frame_timecode::get_default();
-    if (!core::frame_timecode::parse_string(ctx.parameters.at(1), schedule_timecode) ||
-        /*!schedule_timecode.is_valid() ||*/ schedule_timecode == core::frame_timecode::get_default()) {
-        return L"403 SCHEDULE SET ERROR\r\n";
-    }
-
+    
     const std::list<std::wstring> tokens(ctx.parameters.begin() + 2, ctx.parameters.end());
     std::shared_ptr<AMCPCommand>  command =
         ctx.static_context->parser->parse_command(ctx.client, tokens, schedule_token);
@@ -128,6 +123,13 @@ std::wstring schedule_set_command(command_context& ctx)
     if (channel_index < 0) {
         // Only channel commands can be scheduled
         return L"503 SCHEDULE SET FAILED\r\n";
+    }
+
+    core::frame_timecode schedule_timecode = core::frame_timecode::empty();
+    const uint8_t        fps = static_cast<uint8_t>(round(ctx.channels[channel_index].raw_channel->video_format_desc().fps));
+    if (!core::frame_timecode::parse_string(ctx.parameters.at(1), fps, schedule_timecode) ||
+        !schedule_timecode.is_valid()) {
+        return L"403 SCHEDULE SET ERROR\r\n";
     }
 
     ctx.static_context->scheduler->set(channel_index, std::move(schedule_token), schedule_timecode, std::move(command));

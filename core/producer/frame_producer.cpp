@@ -158,7 +158,7 @@ const std::vector<std::wstring>& frame_producer_base::get_variables() const
     return empty;
 }
 
-const frame_timecode& frame_producer_base::timecode() { return frame_timecode::get_default(); }
+const frame_timecode& frame_producer_base::timecode() { return frame_timecode::empty(); }
 bool frame_producer_base::has_timecode() { return false; }
 
 const spl::shared_ptr<frame_producer>& frame_producer::empty()
@@ -196,7 +196,7 @@ const spl::shared_ptr<frame_producer>& frame_producer::empty()
             return c;
         }
 
-        const frame_timecode& timecode() override { return frame_timecode::get_default(); }
+        const frame_timecode& timecode() override { return frame_timecode::empty(); }
         bool                  has_timecode() override { return false; }
 
         boost::property_tree::wptree info() const override

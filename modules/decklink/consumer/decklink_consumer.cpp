@@ -192,11 +192,7 @@ class decklink_timecode : public IDeckLinkTimecode
     HRESULT
     GetComponents(unsigned char* hours, unsigned char* minutes, unsigned char* seconds, unsigned char* frames) override
     {
-        *hours   = timecode_.hours();
-        *minutes = timecode_.minutes();
-        *seconds = timecode_.seconds();
-        *frames  = timecode_.frames_small();
-
+        timecode_.get_components(*hours, *minutes, *seconds, *frames, true);
         return S_OK;
     }
 
@@ -495,7 +491,7 @@ struct decklink_consumer
                                                    out_channel_layout_.num_channels,
                                                0));
 
-            schedule_next_video(core::const_frame::empty(), core::frame_timecode::get_default());
+            schedule_next_video(core::const_frame::empty(), core::frame_timecode::empty());
         }
 
         if (config.embedded_audio) {
@@ -508,7 +504,7 @@ struct decklink_consumer
     ~decklink_consumer()
     {
         is_running_ = false;
-        frame_buffer_.try_push(std::make_pair(core::frame_timecode::get_default(), core::const_frame::empty()));
+        frame_buffer_.try_push(std::make_pair(core::frame_timecode::empty(), core::const_frame::empty()));
 
         if (output_ != nullptr) {
             output_->StopScheduledPlayback(0, nullptr, 0);
@@ -606,7 +602,7 @@ struct decklink_consumer
                                       (format_desc_.audio_cadence[0] * config_.buffer_depth()));
             }
 
-            auto frame = std::make_pair(core::frame_timecode::get_default(), core::const_frame::empty());
+            auto frame = std::make_pair(core::frame_timecode::empty(), core::const_frame::empty());
 
             frame_buffer_.pop(frame);
             ready_for_new_frames_.release();

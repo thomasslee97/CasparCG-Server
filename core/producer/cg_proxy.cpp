@@ -416,7 +416,7 @@ public:
 	void								on_interaction(const interaction_event::ptr& event)	override				{ return producer_->on_interaction(event); }
 	constraints&						pixel_constraints() override												{ return producer_->pixel_constraints(); }
     
-        const frame_timecode& timecode() override { return frame_timecode::get_default(); }
+        const frame_timecode& timecode() override { return frame_timecode::empty(); }
         bool                  has_timecode() override { return false; }
 
 private:
