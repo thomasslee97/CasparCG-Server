@@ -31,8 +31,8 @@
 #include "frame/frame.h"
 #include "frame/frame_factory.h"
 #include "mixer/mixer.h"
-#include "producer/stage.h"
 #include "producer/frame_producer.h"
+#include "producer/stage.h"
 
 #include <common/diagnostics/graph.h>
 #include <common/env.h>
@@ -214,7 +214,8 @@ struct video_channel::impl final
             *monitor_subject_ << monitor::message("/profiler/time") % frame_timer.elapsed() %
                                      (1.0 / video_format_desc().fps)
                               << monitor::message("/format") % format_desc.name
-                              << monitor::message("/timecode") % timecode.string();
+                              << monitor::message("/timecode") % timecode.string()
+                              << monitor::message("/timecode/source") % timecode_->source_name();
 
         } catch (...) {
             CASPAR_LOG_CURRENT_EXCEPTION();
@@ -275,8 +276,8 @@ struct video_channel::impl final
         });
     }
 
-    std::shared_ptr<void>
-    add_timecode_listener(std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)> listener)
+    std::shared_ptr<void> add_timecode_listener(
+        std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)> listener)
     {
         return lock(timecode_listeners_mutex_, [&] {
             auto listener_id = last_timecode_listener_id++;
@@ -322,8 +323,8 @@ std::shared_ptr<void>        video_channel::add_tick_listener(std::function<void
 {
     return impl_->add_tick_listener(std::move(listener));
 }
-std::shared_ptr<void>
-video_channel::add_timecode_listener(std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)> listener)
+std::shared_ptr<void> video_channel::add_timecode_listener(
+    std::function<void(core::frame_timecode, spl::shared_ptr<caspar::diagnostics::graph>)> listener)
 {
     return impl_->add_timecode_listener(std::move(listener));
 }

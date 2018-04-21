@@ -32,6 +32,8 @@ class timecode_source
 
     virtual const frame_timecode& timecode() = 0;
     virtual bool has_timecode() = 0;
+
+    virtual std::wstring print() const = 0;
 };
 
 }}

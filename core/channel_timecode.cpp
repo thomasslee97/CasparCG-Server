@@ -67,6 +67,18 @@ class timecode_source_proxy : public timecode_source
         return false;
     }
 
+    std::wstring print() const override
+    {
+        if (!is_valid_)
+            return L"";
+
+        const std::shared_ptr<timecode_source> src = src_.lock();
+        if (src)
+            return src->print();
+
+        return L"";
+    }
+
     const int                      index_;
     std::weak_ptr<timecode_source> src_;
     bool                           is_valid_;
@@ -138,6 +150,14 @@ struct channel_timecode::impl
         clock_offset_ = 0;
     }
 
+    std::wstring source_name() const
+    {
+        if (source_)
+            return source_->print();
+
+        return L"";
+    }
+
   private:
     void update_offset(core::frame_timecode tc) { clock_offset_ = time_now() - tc.pts(); }
 
@@ -169,6 +189,7 @@ void           channel_timecode::timecode(frame_timecode& tc) { impl_->timecode(
 void channel_timecode::change_format(const video_format_desc& format) { impl_->change_format(format); }
 
 bool channel_timecode::is_free() const { return impl_->is_free(); }
+std::wstring channel_timecode::source_name() const { return impl_->source_name(); }
 
 void channel_timecode::set_source(std::shared_ptr<core::timecode_source> src) { impl_->set_source(src); }
 void channel_timecode::set_weak_source(std::shared_ptr<core::timecode_source> src) { impl_->set_weak_source(src); }

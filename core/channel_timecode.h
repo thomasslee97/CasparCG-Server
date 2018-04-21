@@ -43,6 +43,7 @@ class channel_timecode
     void change_format(const video_format_desc& format);
 
     bool is_free() const;
+    std::wstring source_name() const;
 
     void set_source(std::shared_ptr<core::timecode_source> src);
     void set_weak_source(std::shared_ptr<core::timecode_source> src);
