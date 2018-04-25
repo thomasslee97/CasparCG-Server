@@ -153,7 +153,7 @@ std::wstring timecode_command(command_context& ctx)
         const int layer = boost::lexical_cast<int>(ctx.parameters.at(1));
         const auto producer = ctx.channel.stage->foreground(layer).share();
         ctx.channel.stage->execute([=]() { ctx.channel.raw_channel->timecode()->set_weak_source(producer.get()); });
-
+        
         return L"202 TIMECODE SOURCE OK\r\n";
     }
     if (boost::iequals(ctx.parameters.at(0), L"CLEAR")) {

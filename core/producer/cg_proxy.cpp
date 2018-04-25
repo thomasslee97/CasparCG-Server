@@ -418,6 +418,7 @@ public:
     
         const frame_timecode& timecode() override { return frame_timecode::empty(); }
         bool                  has_timecode() override { return false; }
+        bool                  provides_timecode() override { return false; }
 
 private:
 	std::wstring generate_template_data_xml() const

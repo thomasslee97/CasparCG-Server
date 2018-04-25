@@ -45,8 +45,8 @@ class channel_timecode
     bool is_free() const;
     std::wstring source_name() const;
 
-    void set_source(std::shared_ptr<core::timecode_source> src);
-    void set_weak_source(std::shared_ptr<core::timecode_source> src);
+    bool set_source(std::shared_ptr<core::timecode_source> src);
+    bool set_weak_source(std::shared_ptr<core::timecode_source> src);
     void clear_source();
     void set_system_time();
 

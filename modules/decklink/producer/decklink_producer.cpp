@@ -422,6 +422,7 @@ class decklink_producer_proxy : public core::frame_producer_base
 
     const core::frame_timecode& timecode() override { return producer_->timecode(); }
     bool                        has_timecode() override { return producer_->has_timecode(); }
+    bool                        provides_timecode() override { return true; }
 };
 
 void describe_producer(core::help_sink& sink, const core::help_repository& repo)

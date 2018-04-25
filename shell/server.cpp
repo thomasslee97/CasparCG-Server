@@ -81,6 +81,8 @@
 
 #include <tbb/atomic.h>
 
+#include "protocol/util/tokenize.h"
+#include <boost/format.hpp>
 #include <future>
 
 namespace caspar {
@@ -122,29 +124,29 @@ std::shared_ptr<boost::asio::io_service> create_running_io_service()
 
 struct server::impl : boost::noncopyable
 {
-    std::shared_ptr<boost::asio::io_service>           io_service_ = create_running_io_service();
-    spl::shared_ptr<monitor::subject>                  monitor_subject_;
-    spl::shared_ptr<monitor::subject>                  diag_subject_ = core::diagnostics::get_or_create_subject();
-    accelerator::accelerator                           accelerator_;
-    spl::shared_ptr<help_repository>                   help_repo_;
-    std::shared_ptr<amcp::amcp_command_repository>     amcp_command_repo_;
-    std::shared_ptr<amcp::amcp_command_repository_wrapper>     amcp_command_repo_wrapper_;
-    std::shared_ptr<amcp::command_context_factory>     amcp_context_factory_;
-    std::shared_ptr<amcp::AMCPCommandScheduler>        amcp_command_scheduler_;
-    std::vector<spl::shared_ptr<IO::AsyncEventServer>> async_servers_;
-    std::shared_ptr<IO::AsyncEventServer>              primary_amcp_server_;
-    std::shared_ptr<osc::client>                       osc_client_ = std::make_shared<osc::client>(io_service_);
-    std::vector<std::shared_ptr<void>>                 predefined_osc_subscriptions_;
-    std::vector<spl::shared_ptr<video_channel>>        channels_;
-    spl::shared_ptr<media_info_repository>             media_info_repo_;
-    boost::thread                                      initial_media_info_thread_;
-    spl::shared_ptr<system_info_provider_repository>   system_info_provider_repo_;
-    spl::shared_ptr<core::cg_producer_registry>        cg_registry_;
-    spl::shared_ptr<core::frame_producer_registry>     producer_registry_;
-    spl::shared_ptr<core::frame_consumer_registry>     consumer_registry_;
-    tbb::atomic<bool>                                  running_;
-    std::shared_ptr<thumbnail_generator>               thumbnail_generator_;
-    std::promise<bool>&                                shutdown_server_now_;
+    std::shared_ptr<boost::asio::io_service>               io_service_ = create_running_io_service();
+    spl::shared_ptr<monitor::subject>                      monitor_subject_;
+    spl::shared_ptr<monitor::subject>                      diag_subject_ = core::diagnostics::get_or_create_subject();
+    accelerator::accelerator                               accelerator_;
+    spl::shared_ptr<help_repository>                       help_repo_;
+    std::shared_ptr<amcp::amcp_command_repository>         amcp_command_repo_;
+    std::shared_ptr<amcp::amcp_command_repository_wrapper> amcp_command_repo_wrapper_;
+    std::shared_ptr<amcp::command_context_factory>         amcp_context_factory_;
+    std::shared_ptr<amcp::AMCPCommandScheduler>            amcp_command_scheduler_;
+    std::vector<spl::shared_ptr<IO::AsyncEventServer>>     async_servers_;
+    std::shared_ptr<IO::AsyncEventServer>                  primary_amcp_server_;
+    std::shared_ptr<osc::client>                           osc_client_ = std::make_shared<osc::client>(io_service_);
+    std::vector<std::shared_ptr<void>>                     predefined_osc_subscriptions_;
+    std::vector<spl::shared_ptr<video_channel>>            channels_;
+    spl::shared_ptr<media_info_repository>                 media_info_repo_;
+    boost::thread                                          initial_media_info_thread_;
+    spl::shared_ptr<system_info_provider_repository>       system_info_provider_repo_;
+    spl::shared_ptr<core::cg_producer_registry>            cg_registry_;
+    spl::shared_ptr<core::frame_producer_registry>         producer_registry_;
+    spl::shared_ptr<core::frame_consumer_registry>         consumer_registry_;
+    tbb::atomic<bool>                                      running_;
+    std::shared_ptr<thumbnail_generator>                   thumbnail_generator_;
+    std::promise<bool>&                                    shutdown_server_now_;
 
     explicit impl(std::promise<bool>& shutdown_server_now)
         : accelerator_(env::properties().get(L"configuration.accelerator", L"auto"))
@@ -176,11 +178,17 @@ struct server::impl : boost::noncopyable
         setup_audio_config(env::properties());
         CASPAR_LOG(info) << L"Initialized audio config.";
 
-        setup_channels(env::properties());
+        auto xml_channels = setup_channels(env::properties());
         CASPAR_LOG(info) << L"Initialized channels.";
 
         setup_thumbnail_generation(env::properties());
         CASPAR_LOG(info) << L"Initialized thumbnail generator.";
+
+        setup_amcp_command_repo();
+        CASPAR_LOG(info) << L"Initialized command repository.";
+
+        setup_channel_producers(xml_channels);
+        CASPAR_LOG(info) << L"Initialized channel predefined producers.";
 
         setup_controllers(env::properties());
         CASPAR_LOG(info) << L"Initialized controllers.";
@@ -247,7 +255,7 @@ struct server::impl : boost::noncopyable
         }
     }
 
-    void setup_channels(const boost::property_tree::wptree& pt)
+    std::vector<boost::property_tree::wptree> setup_channels(const boost::property_tree::wptree& pt)
     {
         using boost::property_tree::wptree;
 
@@ -307,6 +315,8 @@ struct server::impl : boost::noncopyable
                 accelerator_.create_image_mixer(channel_id)));
             channels_.back()->monitor_output().attach_parent(monitor_subject_);
         }
+
+        return xml_channels;
     }
 
     void setup_osc(const boost::property_tree::wptree& pt)
@@ -373,7 +383,6 @@ struct server::impl : boost::noncopyable
             pt.get(L"configuration.thumbnails.mipmap", true)));
     }
 
-    // TODO - location of this
     static std::vector<amcp::channel_context>
     build_channel_contexts(const std::vector<spl::shared_ptr<core::video_channel>>& channels)
     {
@@ -381,33 +390,88 @@ struct server::impl : boost::noncopyable
 
         int index = 0;
         for (const auto& channel : channels) {
-            const std::wstring lifecycle_key = L"lock" + boost::lexical_cast<std::wstring>(index);
-            res.push_back(amcp::channel_context(channel, channel->stage(), lifecycle_key));
+            const std::wstring lifecycle_key = L"lock" + std::to_wstring(index);
+            res.emplace_back(channel, channel->stage(), lifecycle_key);
             ++index;
         }
 
-        return std::move(res);
+        return res;
     }
 
-    void setup_controllers(const boost::property_tree::wptree& pt)
+    void setup_channel_producers(const std::vector<boost::property_tree::wptree>& xml_channels)
+    {
+        auto console_client = spl::make_shared<IO::ConsoleClientInfo>();
+
+        for (auto& channel : channels_) {
+            core::diagnostics::scoped_call_context save;
+            core::diagnostics::call_context::for_thread().video_channel = channel->index();
+
+            auto xml_channel = xml_channels.at(channel->index() - 1);
+
+            if (xml_channel.get_child_optional(L"producers")) {
+                for (auto& xml_producer : xml_channel | witerate_children(L"producers") | welement_context_iteration) {
+                    ptree_verify_element_name(xml_producer, L"producer");
+
+                    const std::wstring command = xml_producer.second.get_value(L"");
+                    const auto         attrs   = xml_producer.second.get_child(L"<xmlattr>");
+                    const int id      = attrs.get(L"id", -1);
+                    
+                    try {
+
+                        std::list<std::wstring> tokens{L"PLAY", (boost::wformat(L"%i-%i") % channel->index() % id).str()};
+                        IO::tokenize(command, tokens);
+                        auto cmd = amcp_command_repo_->parse_command(console_client, tokens, L"");
+
+                        std::wstring res = cmd->Execute(amcp_command_repo_->channels()).get();
+                        console_client->send(std::move(res), false);
+                    } catch (const user_error& e) {
+                        CASPAR_LOG_CURRENT_EXCEPTION_AT_LEVEL(debug);
+                        CASPAR_LOG(error) << get_message_and_context(e) << " Turn on log level debug for stacktrace.";
+                    } catch (...) {
+                        CASPAR_LOG_CURRENT_EXCEPTION();
+                    }
+                }
+            }
+
+            const std::wstring source = xml_channel.get(L"timecode", L"free");
+            if (boost::iequals(source, "clock")) {
+                channel->timecode()->set_system_time(); // TODO - offset/timezone
+            } else if (boost::iequals(source, "layer")) {
+                const int layer = xml_channel.get(L"timecode_layer", 0);
+
+                // Run it on the stage to ensure the producer creation has completed fully
+                channel->stage()->execute([channel, layer]()
+                {
+                    const std::shared_ptr<frame_producer> producer = channel->stage()->foreground(layer).get();
+                    if (!channel->timecode()->set_weak_source(producer)) {
+                        CASPAR_LOG(error)
+                            << L"timecode[" << channel->index() << L"] failed to set timecode from layer " << layer;
+                    }
+                });
+            } else {
+                channel->timecode()->clear_source();
+            }
+        }
+    }
+
+    void setup_amcp_command_repo()
     {
         amcp_command_scheduler_ = std::make_shared<amcp::AMCPCommandScheduler>();
 
         amcp_command_repo_ =
-            std::make_shared<amcp::amcp_command_repository>(std::move(build_channel_contexts(channels_)), help_repo_);
+            std::make_shared<amcp::amcp_command_repository>(build_channel_contexts(channels_), help_repo_);
 
-        auto ctx =
-            std::make_shared<amcp::amcp_command_static_context>(thumbnail_generator_,
-                                                                media_info_repo_,
-                                                                system_info_provider_repo_,
-                                                                cg_registry_,
-                                                                help_repo_,
-                                                                producer_registry_,
-                                                                consumer_registry_,
-                                                                spl::make_shared_ptr(amcp_command_scheduler_),
-                                                                amcp_command_repo_,
-                                                                accelerator_.get_ogl_device(),
-                                                                shutdown_server_now_);
+        auto ctx = std::make_shared<amcp::amcp_command_static_context>(thumbnail_generator_,
+                                                                       media_info_repo_,
+                                                                       system_info_provider_repo_,
+                                                                       cg_registry_,
+                                                                       help_repo_,
+                                                                       producer_registry_,
+                                                                       consumer_registry_,
+                                                                       spl::make_shared_ptr(amcp_command_scheduler_),
+                                                                       amcp_command_repo_,
+                                                                       accelerator_.get_ogl_device(),
+                                                                       shutdown_server_now_);
 
         amcp_context_factory_ = std::make_shared<amcp::command_context_factory>(ctx);
 
@@ -415,7 +479,10 @@ struct server::impl : boost::noncopyable
             std::make_shared<amcp::amcp_command_repository_wrapper>(amcp_command_repo_, amcp_context_factory_);
 
         amcp::register_commands(amcp_command_repo_wrapper_);
+    }
 
+    void setup_controllers(const boost::property_tree::wptree& pt)
+    {
         using boost::property_tree::wptree;
         for (auto& xml_controller : pt | witerate_children(L"configuration.controllers") | welement_context_iteration) {
             auto name     = xml_controller.first;

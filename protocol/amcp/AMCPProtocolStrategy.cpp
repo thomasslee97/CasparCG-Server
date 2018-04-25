@@ -27,6 +27,7 @@
 #include "AMCPProtocolStrategy.h"
 #include "amcp_command_repository.h"
 #include "amcp_shared.h"
+#include "../util/tokenize.h"
 
 #include <algorithm>
 
@@ -146,7 +147,7 @@ class AMCPProtocolStrategy
     void parse(const std::wstring& message, ClientInfoPtr client, const std::shared_ptr<AMCPClientBatchInfo>& batch)
     {
         std::list<std::wstring> tokens;
-        tokenize(message, tokens);
+        IO::tokenize(message, tokens);
 
         if (!tokens.empty() && boost::iequals(tokens.front(), L"PING")) {
             tokens.pop_front();
@@ -309,71 +310,7 @@ class AMCPProtocolStrategy
         return false;
     }
 
-    template <typename C>
-    static std::size_t tokenize(const std::wstring& message, C& pTokenVector)
-    {
-        // split on whitespace but keep strings within quotationmarks
-        // treat \ as the start of an escape-sequence: the following char will indicate what to actually put in the
-        // string
-
-        std::wstring currentToken;
-
-        bool inQuote        = false;
-        bool getSpecialCode = false;
-
-        for (unsigned int charIndex = 0; charIndex < message.size(); ++charIndex) {
-            if (getSpecialCode) {
-                // insert code-handling here
-                switch (message[charIndex]) {
-                    case L'\\':
-                        currentToken += L"\\";
-                        break;
-                    case L'\"':
-                        currentToken += L"\"";
-                        break;
-                    case L'n':
-                        currentToken += L"\n";
-                        break;
-                    default:
-                        break;
-                };
-                getSpecialCode = false;
-                continue;
-            }
-
-            if (message[charIndex] == L'\\') {
-                getSpecialCode = true;
-                continue;
-            }
-
-            if (message[charIndex] == L' ' && inQuote == false) {
-                if (!currentToken.empty()) {
-                    pTokenVector.push_back(currentToken);
-                    currentToken.clear();
-                }
-                continue;
-            }
-
-            if (message[charIndex] == L'\"') {
-                inQuote = !inQuote;
-
-                if (!currentToken.empty() || !inQuote) {
-                    pTokenVector.push_back(currentToken);
-                    currentToken.clear();
-                }
-                continue;
-            }
-
-            currentToken += message[charIndex];
-        }
-
-        if (!currentToken.empty()) {
-            pTokenVector.push_back(currentToken);
-            currentToken.clear();
-        }
-
-        return pTokenVector.size();
-    }
+    
 };
 
 class AMCPClientStrategy : public IO::protocol_strategy<wchar_t>

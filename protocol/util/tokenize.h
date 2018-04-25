@@ -20,21 +20,9 @@
 */
 
 #pragma once
-#include "core/frame/frame_timecode.h"
 
-namespace caspar { namespace core {
+namespace caspar { namespace IO {
 
-// Interface
-class timecode_source
-{
-  public:
-    virtual ~timecode_source() = default;
-
-    virtual const frame_timecode& timecode() = 0;
-    virtual bool has_timecode() = 0;
-    virtual bool provides_timecode() = 0;
-
-    virtual std::wstring print() const = 0;
-};
+std::size_t tokenize(const std::wstring& message, std::list<std::wstring>& pTokenVector);
 
 }}

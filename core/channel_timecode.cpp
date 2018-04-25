@@ -27,8 +27,6 @@
 
 namespace caspar { namespace core {
     
-std::wstring get_name(const int index) { return L"video_channel[" + boost::lexical_cast<std::wstring>(index) + L"]"; }
-
 class timecode_source_proxy : public timecode_source
 {
   public:
@@ -48,7 +46,7 @@ class timecode_source_proxy : public timecode_source
         if (src)
             return src->timecode();
 
-        CASPAR_LOG(warning) << get_name(index_) << L" Lost timecode source";
+        CASPAR_LOG(warning) << L"timecode[" << index_ << L"] - Lost timecode source";
         is_valid_ = false;
         return frame_timecode::empty();
     }
@@ -62,7 +60,21 @@ class timecode_source_proxy : public timecode_source
         if (src)
             return src->has_timecode();
 
-        CASPAR_LOG(warning) << get_name(index_) << L" Lost timecode source";
+        CASPAR_LOG(warning) << L"timecode[" << index_ << L"] - Lost timecode source";
+        is_valid_ = false;
+        return false;
+    }
+
+    bool provides_timecode() override
+    {
+        if (!is_valid_)
+            return false;
+
+        const std::shared_ptr<timecode_source> src = src_.lock();
+        if (src)
+            return src->provides_timecode();
+
+        CASPAR_LOG(warning) << L"timecode[" << index_ << L"] - Lost timecode source";
         is_valid_ = false;
         return false;
     }
@@ -91,6 +103,7 @@ struct channel_timecode::impl
         : timecode_(frame_timecode(0, static_cast<uint8_t>(round(format.fps))))
         , format_(format)
         , index_(index)
+        , is_system_clock_(false)
         , clock_offset_(0)
     {
     }
@@ -108,7 +121,7 @@ struct channel_timecode::impl
             }
 
             // fall back to incrmenting
-            CASPAR_LOG(warning) << get_name(index_) << L"Timecode update invalid. Ignoring";
+            CASPAR_LOG(warning) << L"timecode[" << index_ << L"] - Timecode update invalid. Ignoring";
         }
 
         static long millis_per_day = 1000 * 60 * 60 * 24;
@@ -137,17 +150,39 @@ struct channel_timecode::impl
 
     bool is_free() const { return !(source_ && source_->has_timecode()); }
 
-    void set_source(std::shared_ptr<core::timecode_source> src) { source_ = src; }
-    void set_weak_source(std::shared_ptr<core::timecode_source> src)
+    bool set_source(const std::shared_ptr<core::timecode_source>& src)
     {
-        source_ = std::make_shared<timecode_source_proxy>(index_, src);
+        if (!src->provides_timecode())
+            return false;
+
+        source_ = src;
+        is_system_clock_ = false;
+        CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Loaded producer " << src->print();
+        return true;
     }
-    void clear_source() { source_ = nullptr; }
+    bool set_weak_source(const std::shared_ptr<core::timecode_source>& src)
+    {
+        if (!src->provides_timecode())
+            return false;
+
+        source_          = std::make_shared<timecode_source_proxy>(index_, src);
+        is_system_clock_ = false;
+        CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Loaded producer " << src->print();
+        return true;
+    }
+    void clear_source()
+    {
+        source_          = nullptr;
+        is_system_clock_ = false;
+        CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Set to freerun";
+    }
     void set_system_time()
     {
         // TODO timezone / custom offset
         clear_source();
         clock_offset_ = 0;
+        is_system_clock_ = true;
+        CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Set to system clock";
     }
 
     std::wstring source_name() const
@@ -155,11 +190,18 @@ struct channel_timecode::impl
         if (source_)
             return source_->print();
 
+        if (is_system_clock_)
+            return L"clock";
+
         return L"";
     }
 
   private:
-    void update_offset(core::frame_timecode tc) { clock_offset_ = time_now() - tc.pts(); }
+    void update_offset(core::frame_timecode tc)
+    {
+        clock_offset_ = time_now() - tc.pts();
+        is_system_clock_ = false;
+    }
 
     int64_t time_now() const
     {
@@ -172,6 +214,7 @@ struct channel_timecode::impl
     const int         index_;
 
     std::shared_ptr<core::timecode_source> source_; // TODO - this needs some lock
+    bool                                   is_system_clock_;
     int64_t                                clock_offset_;
 };
 
@@ -191,8 +234,8 @@ void channel_timecode::change_format(const video_format_desc& format) { impl_->c
 bool channel_timecode::is_free() const { return impl_->is_free(); }
 std::wstring channel_timecode::source_name() const { return impl_->source_name(); }
 
-void channel_timecode::set_source(std::shared_ptr<core::timecode_source> src) { impl_->set_source(src); }
-void channel_timecode::set_weak_source(std::shared_ptr<core::timecode_source> src) { impl_->set_weak_source(src); }
+bool channel_timecode::set_source(std::shared_ptr<core::timecode_source> src) { return impl_->set_source(src); }
+bool channel_timecode::set_weak_source(std::shared_ptr<core::timecode_source> src) { return impl_->set_weak_source(src); }
 void channel_timecode::clear_source() { impl_->clear_source(); }
 void channel_timecode::set_system_time() { impl_->set_system_time(); }
 
