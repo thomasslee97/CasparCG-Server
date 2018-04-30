@@ -302,20 +302,15 @@ class decklink_frame : public IDeckLinkVideoFrame
 
     virtual HRESULT STDMETHODCALLTYPE GetTimecode(BMDTimecodeFormat format, IDeckLinkTimecode** timecode)
     {
-        // TODO - need to handle drop frame, interlaced etc
-        if (format == bmdTimecodeRP188VITC1) {
-            *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault);
-            // printf("Gets: %d:%d:%d:%d\n", timecode_.hours, timecode_.minutes, timecode_.seconds, timecode_.frames);
-            return S_OK;
-        }
-        if (format == bmdTimecodeRP188VITC2) {
+        if (format == bmdTimecodeRP188VITC2 || format == bmdTimecodeVITCField2) {
             *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault | bmdTimecodeFieldMark);
             return S_OK;
         }
 
-        // TODO - remaining formats?
-
-        return S_FALSE;
+        // TODO - need to handle drop frame, interlaced etc
+        *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault);
+        // printf("Gets: %d:%d:%d:%d\n", timecode_.hours, timecode_.minutes, timecode_.seconds, timecode_.frames);
+        return S_OK;
     }
 
     virtual HRESULT STDMETHODCALLTYPE GetAncillaryData(IDeckLinkVideoFrameAncillary** ancillary) { return S_FALSE; }
