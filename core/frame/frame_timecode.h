@@ -56,6 +56,9 @@ struct frame_timecode
     frame_timecode operator+(int frames) const;
     frame_timecode operator-(int frames) const;
 
+    frame_timecode operator-(const frame_timecode& other) const;
+    frame_timecode operator+(const frame_timecode& other) const;
+
     bool is_between(const frame_timecode& start, const frame_timecode& end) const;
 
     bool is_valid() const { return fps_ != 0; }

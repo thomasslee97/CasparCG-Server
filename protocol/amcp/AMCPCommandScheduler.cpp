@@ -89,9 +89,10 @@ class AMCPScheduledCommand
 class AMCPCommandSchedulerQueue
 {
   public:
-    AMCPCommandSchedulerQueue()
+    AMCPCommandSchedulerQueue(const int index)
         : scheduled_commands_()
         , last_timecode_(core::frame_timecode::empty())
+        , index_(index)
     {
     }
 
@@ -167,7 +168,17 @@ class AMCPCommandSchedulerQueue
         // if fps mismatch, then go with one frame
         if (last_timecode_.fps() != timecode.fps())
             return std::make_pair(timecode, timecode + 1);
-        
+
+        int delta = static_cast<int>(((timecode + 1) - last_timecode_).total_frames());
+        if (delta >= static_cast<int>(last_timecode_.max_frames()) / 2)
+            delta -= last_timecode_.max_frames();
+
+        if (delta > last_timecode_.fps() || delta < 0) {
+            CASPAR_LOG(warning) << L"timecode[" << index_ << L"] jump detected. Skipping scheduling for: "
+                                << last_timecode_.string() << L" to " << (timecode + 1).string();
+            return std::make_pair(timecode, timecode + 1);
+        }
+
         return std::make_pair(last_timecode_, timecode + 1);
     }
 
@@ -198,6 +209,7 @@ class AMCPCommandSchedulerQueue
   private:
     std::vector<std::shared_ptr<AMCPScheduledCommand>> scheduled_commands_;
     core::frame_timecode                               last_timecode_;
+    const int                                          index_;
 };
 
 struct AMCPCommandScheduler::Impl
@@ -207,7 +219,13 @@ struct AMCPCommandScheduler::Impl
     std::timed_mutex                                        lock_;
 
   public:
-    void add_channel() { queues_.push_back(std::make_shared<AMCPCommandSchedulerQueue>()); }
+    void create_channels(int count)
+    {
+        queues_.clear();
+        for (int i = 1; i <= count; ++i) {
+            queues_.push_back(std::make_shared<AMCPCommandSchedulerQueue>(i));
+        }
+    }
 
     void set(int                          channel_index,
              const std::wstring&          token,
@@ -310,7 +328,7 @@ AMCPCommandScheduler::AMCPCommandScheduler()
 {
 }
 
-void AMCPCommandScheduler::add_channel() { impl_->add_channel(); }
+void AMCPCommandScheduler::create_channels(const int count) { impl_->create_channels(count); }
 
 void AMCPCommandScheduler::set(int                          channel_index,
                                const std::wstring&          token,

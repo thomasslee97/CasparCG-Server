@@ -31,7 +31,7 @@ uint32_t max_frames_for_fps(const uint8_t fps)
 {
     static uint32_t num_seconds = 24 * 60 * 60;
 
-    return (num_seconds * fps) - 1;
+    return num_seconds * fps;
 }
 
 uint32_t validate(uint32_t frames, uint8_t fps)
@@ -39,7 +39,7 @@ uint32_t validate(uint32_t frames, uint8_t fps)
     const uint32_t max = max_frames_for_fps(fps);
 
     uint32_t val = frames;
-    if (val > max)
+    if (val >= max)
         val -= max;
 
     return val;
@@ -47,9 +47,11 @@ uint32_t validate(uint32_t frames, uint8_t fps)
 
 frame_timecode validate(const frame_timecode& timecode, const int delta)
 {
+    const int max_frames = timecode.max_frames();
     int val = timecode.total_frames() + delta;
+    val %= max_frames;
     if (val < 0)
-        val += timecode.max_frames();
+        val += max_frames;
 
     return frame_timecode(static_cast<uint32_t>(val), timecode.fps());
 }
@@ -197,6 +199,9 @@ frame_timecode frame_timecode::operator+=(int delta) { return *this = validate(*
 frame_timecode frame_timecode::operator-=(int delta) { return *this = validate(*this, -delta); }
 frame_timecode frame_timecode::operator+(int delta) const { return validate(*this, delta); }
 frame_timecode frame_timecode::operator-(int delta) const { return validate(*this, -delta); }
+
+frame_timecode frame_timecode::operator-(const frame_timecode& other) const { return validate(*this, -static_cast<int>(other.total_frames())); }
+frame_timecode frame_timecode::operator+(const frame_timecode& other) const { return validate(*this, other.total_frames()); }
 
 bool frame_timecode::is_between(const frame_timecode& start, const frame_timecode& end) const
 {

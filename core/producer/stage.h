@@ -185,6 +185,7 @@ class stage_delayed final : public stage_base
 
     size_t count_queued() const { return executor_.size(); }
     void   release() { waiter_.set_value(); }
+    void   abort(){ executor_.clear(); }
     void   wait()
     {
         executor_.stop();

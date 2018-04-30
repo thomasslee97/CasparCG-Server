@@ -32,7 +32,7 @@ class AMCPCommandScheduler
   public:
     AMCPCommandScheduler();
 
-    void add_channel();
+    void create_channels(int count);
 
     void set(int                          channel_index,
              const std::wstring&          token,

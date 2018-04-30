@@ -49,8 +49,7 @@ exec_cmd(std::shared_ptr<AMCPCommand> cmd, const std::vector<channel_context>& c
             return std::async(std::launch::async, [cmd, res, reply_without_req_id, timer, name]() -> bool {
                 cmd->SendReply(res.get(), reply_without_req_id);
 
-                CASPAR_LOG(warning) << "Executed command (" << timer.elapsed() << "s): " << name;
-                // TODO - exception handling?
+                CASPAR_LOG(debug) << "Executed command (" << timer.elapsed() << "s): " << name;
                 return true;
             });
 
@@ -113,61 +112,67 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
     if (cmd->Commands().empty())
         return;
 
-    caspar::timer timer;
-    CASPAR_LOG(warning) << "Executing command: " << cmd->name();
-
     // Shortcut for commands which are either not a batch, or don't need to be
     if (cmd->Commands().size() == 1) {
         exec_cmd(cmd->Commands().at(0), channels_, true);
-
-        CASPAR_LOG(warning) << "Executed command (" << timer.elapsed() << "s): " << cmd->name();
         return;
     }
 
-    // TODO - need to make sure we clean up properly, in case of an exception in here somewhere?
-    std::vector<channel_context>                      channels2;
-    std::vector<std::shared_ptr<core::stage_delayed>> stages2;
-    for (auto& ch : channels_) {
-        std::promise<void> wa;
+    caspar::timer timer;
+    CASPAR_LOG(warning) << "Executing batch: " << cmd->name();
 
-        auto st = std::make_shared<core::stage_delayed>(ch.raw_channel->stage());
-        stages2.push_back(st);
-        channels2.emplace_back(ch.raw_channel, st, ch.lifecycle_key_);
-    }
+    std::vector<channel_context>                      delayed_channels;
+    std::vector<std::shared_ptr<core::stage_delayed>> delayed_stages;
+    std::vector<std::future<bool>>                    results;
+    std::vector<std::unique_lock<std::mutex>>         channel_locks;
 
-    // 'execute' aka queue all comamnds
-    std::vector<std::future<bool>> results;
-    for (auto& cmd2 : cmd->Commands()) {
-        results.push_back(exec_cmd(cmd2, channels2, cmd->HasClient()));
-    }
+    try {
+        for (auto& ch : channels_) {
+            std::promise<void> wa;
 
-    // lock all the channels needed
-    std::vector<std::unique_lock<std::mutex>> locks;
-    for (auto& st : stages2) {
-        if (st->count_queued() == 1) {
-            // just the waiter
-            continue;
+            auto st = std::make_shared<core::stage_delayed>(ch.raw_channel->stage());
+            delayed_stages.push_back(st);
+            delayed_channels.emplace_back(ch.raw_channel, st, ch.lifecycle_key_);
         }
 
-        locks.push_back(st->get_lock());
-    }
+        // 'execute' aka queue all comamnds
+        for (auto& cmd2 : cmd->Commands()) {
+            results.push_back(exec_cmd(cmd2, delayed_channels, cmd->HasClient()));
+        }
 
-    // execute the commands
-    for (auto& st : stages2) {
-        st->release();
+        // lock all the channels needed
+        for (auto& st : delayed_stages) {
+            if (st->count_queued() <= 1) {
+                // just the waiter
+                continue;
+            }
+
+            channel_locks.push_back(st->get_lock());
+        }
+
+        // execute the commands
+        for (auto& st : delayed_stages) {
+            st->release();
+        }
+    } catch (...) {
+        // Ensure the created executors don't get leaked
+        for (auto& st : delayed_stages) {
+            st->abort();
+        }
+
+        throw;
     }
 
     // wait for the commands to finish
-    for (auto& st : stages2) {
+    for (auto& st : delayed_stages) {
         // TODO - move the locks to inside stage_delayed so that it can be released once the channel is done
         // TODO - when doing so, make sure that a swap locks on the delay executor too, to make sure it works
         st->wait();
     }
-    locks.clear();
+    channel_locks.clear();
 
     int failed = 0;
-    for (auto& f : results) 
-    {
+    for (auto& f : results) {
         if (!f.get())
             failed++;
     }
@@ -177,7 +182,7 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
     else
         cmd->SendReply(L"202 COMMIT OK\r\n");
 
-    CASPAR_LOG(warning) << "Executed command (" << timer.elapsed() << "s): " << cmd->name();
+    CASPAR_LOG(debug) << "Executed batch (" << timer.elapsed() << "s): " << cmd->name();
 }
 
 }}} // namespace caspar::protocol::amcp

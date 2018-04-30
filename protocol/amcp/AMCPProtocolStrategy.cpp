@@ -105,11 +105,12 @@ class AMCPProtocolStrategy
     {
         commandQueues_.push_back(spl::make_shared<AMCPCommandQueue>(L"General Queue for " + name, repo_->channels()));
 
+        scheduler_->create_channels(static_cast<int>(repo_->channels().size()));
+
         int i = 0;
         for (const auto& ch : repo_->channels()) {
             auto queue = spl::make_shared<AMCPCommandQueue>(
                 L"Channel " + boost::lexical_cast<std::wstring>(i + 1) + L" for " + name, repo_->channels());
-            scheduler_->add_channel(); // TODO - move to do in bulk
             std::weak_ptr<AMCPCommandQueue> queue_weak = queue;
             schedule_ops_.push_back(ch.raw_channel->add_timecode_listener([&, i, queue_weak](core::frame_timecode timecode, spl::shared_ptr<caspar::diagnostics::graph> graph) {
                 auto queue2 = queue_weak.lock();
