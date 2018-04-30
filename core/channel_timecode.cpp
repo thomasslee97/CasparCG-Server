@@ -82,13 +82,13 @@ class timecode_source_proxy : public timecode_source
     std::wstring print() const override
     {
         if (!is_valid_)
-            return L"";
+            return L"free";
 
         const std::shared_ptr<timecode_source> src = src_.lock();
         if (src)
             return src->print();
 
-        return L"";
+        return L"free";
     }
 
     const int                      index_;
@@ -179,8 +179,8 @@ struct channel_timecode::impl
     void set_system_time()
     {
         // TODO timezone / custom offset
-        clear_source();
-        clock_offset_ = 0;
+        source_          = nullptr;
+        clock_offset_    = 0;
         is_system_clock_ = true;
         CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Set to system clock";
     }
@@ -193,7 +193,7 @@ struct channel_timecode::impl
         if (is_system_clock_)
             return L"clock";
 
-        return L"";
+        return L"free";
     }
 
   private:
