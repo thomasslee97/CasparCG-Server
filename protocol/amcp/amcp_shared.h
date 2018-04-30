@@ -16,7 +16,7 @@ class channel_context
                              const std::wstring&                         lifecycle_key)
         : raw_channel(ch)
         , stage(s)
-        , lock(std::make_shared<caspar::IO::lock_container>(lifecycle_key)) // TODO - does this need to be shared rather than unique each time?
+        , lock(std::make_shared<caspar::IO::lock_container>(lifecycle_key))
         , lifecycle_key_(lifecycle_key)
     {
     }

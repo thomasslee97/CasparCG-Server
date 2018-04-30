@@ -130,7 +130,7 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
         for (auto& ch : channels_) {
             std::promise<void> wa;
 
-            auto st = std::make_shared<core::stage_delayed>(ch.raw_channel->stage());
+            auto st = std::make_shared<core::stage_delayed>(ch.raw_channel->stage(), ch.raw_channel->index());
             delayed_stages.push_back(st);
             delayed_channels.emplace_back(ch.raw_channel, st, ch.lifecycle_key_);
         }

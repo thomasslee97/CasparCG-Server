@@ -181,7 +181,7 @@ class stage : public stage_base
 class stage_delayed final : public stage_base
 {
   public:
-    stage_delayed(std::shared_ptr<stage>& st);
+    stage_delayed(std::shared_ptr<stage>& st, int index);
 
     size_t count_queued() const { return executor_.size(); }
     void   release() { waiter_.set_value(); }

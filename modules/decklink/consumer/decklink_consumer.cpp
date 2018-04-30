@@ -309,7 +309,6 @@ class decklink_frame : public IDeckLinkVideoFrame
 
         // TODO - need to handle drop frame, interlaced etc
         *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault);
-        // printf("Gets: %d:%d:%d:%d\n", timecode_.hours, timecode_.minutes, timecode_.seconds, timecode_.frames);
         return S_OK;
     }
 

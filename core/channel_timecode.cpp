@@ -24,6 +24,7 @@
 
 #include <boost/lexical_cast.hpp>
 #include <chrono>
+#include <mutex>
 
 namespace caspar { namespace core {
     
@@ -113,7 +114,12 @@ struct channel_timecode::impl
     frame_timecode tick()
     {
         if (!is_free()) {
-            const frame_timecode tc = source_->timecode();
+            frame_timecode tc;
+            {
+                std::unique_lock<std::mutex> lock(source_lock_);
+                tc = source_->timecode();
+            }
+
             if (tc.is_valid()) {
                 timecode_ = tc; // TODO - adjust to match fps
                 update_offset(tc);
@@ -148,12 +154,19 @@ struct channel_timecode::impl
         // TODO - update current to match fps
     }
 
-    bool is_free() const { return !(source_ && source_->has_timecode()); }
+    bool is_free() const
+    {
+        std::unique_lock<std::mutex> lock(source_lock_);
+
+        return !(source_ && source_->has_timecode());
+    }
 
     bool set_source(const std::shared_ptr<core::timecode_source>& src)
     {
         if (!src->provides_timecode())
             return false;
+
+        std::unique_lock<std::mutex> lock(source_lock_);
 
         source_ = src;
         is_system_clock_ = false;
@@ -165,6 +178,8 @@ struct channel_timecode::impl
         if (!src->provides_timecode())
             return false;
 
+        std::unique_lock<std::mutex> lock(source_lock_);
+
         source_          = std::make_shared<timecode_source_proxy>(index_, src);
         is_system_clock_ = false;
         CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Loaded producer " << src->print();
@@ -172,12 +187,16 @@ struct channel_timecode::impl
     }
     void clear_source()
     {
+        std::unique_lock<std::mutex> lock(source_lock_);
+
         source_          = nullptr;
         is_system_clock_ = false;
         CASPAR_LOG(info) << L"timecode[" << index_ << L"] - Set to freerun";
     }
     void set_system_time()
     {
+        std::unique_lock<std::mutex> lock(source_lock_);
+
         // TODO timezone / custom offset
         source_          = nullptr;
         clock_offset_    = 0;
@@ -187,6 +206,8 @@ struct channel_timecode::impl
 
     std::wstring source_name() const
     {
+        std::unique_lock<std::mutex> lock(source_lock_);
+
         if (source_)
             return source_->print();
 
@@ -213,7 +234,8 @@ struct channel_timecode::impl
     video_format_desc format_;
     const int         index_;
 
-    std::shared_ptr<core::timecode_source> source_; // TODO - this needs some lock
+    std::shared_ptr<core::timecode_source> source_;
+    mutable std::mutex                     source_lock_;
     bool                                   is_system_clock_;
     int64_t                                clock_offset_;
 };
