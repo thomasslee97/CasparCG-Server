@@ -136,16 +136,16 @@ class AMCPCommandSchedulerQueue
 
     void clear() { scheduled_commands_.clear(); }
 
-    std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode)
+    std::vector<std::tuple<int, core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode)
     {
-        std::vector<std::pair<core::frame_timecode, std::wstring>> res;
+        std::vector<std::tuple<int, core::frame_timecode, std::wstring>> res;
 
         const bool include_all = timecode == core::frame_timecode::empty();
 
         for (auto command : scheduled_commands_) {
             for (auto token : command->get_tokens()) {
                 if (include_all || timecode == token.first)
-                    res.push_back(std::move(token));
+                    res.emplace_back(index_, token.first, token.second);
             }
         }
 
@@ -265,11 +265,20 @@ struct AMCPCommandScheduler::Impl
         }
     }
 
-    std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode)
+    std::vector<std::tuple<int, core::frame_timecode, std::wstring>> list(int                   channel_index,
+                                                                          core::frame_timecode& timecode)
     {
-        std::vector<std::pair<core::frame_timecode, std::wstring>> res;
+        std::lock_guard<std::timed_mutex> lock(lock_);
+
+        return queues_.at(channel_index)->list(timecode);
+    }
+
+    std::vector<std::tuple<int, core::frame_timecode, std::wstring>> list_all()
+    {
+        std::vector<std::tuple<int, core::frame_timecode, std::wstring>> res;
 
         std::lock_guard<std::timed_mutex> lock(lock_);
+        core::frame_timecode              timecode = core::frame_timecode::empty();
 
         for (auto queue : queues_) {
             for (auto token : queue->list(timecode)) {
@@ -342,9 +351,15 @@ bool AMCPCommandScheduler::remove(const std::wstring& token) { return impl_->rem
 
 void AMCPCommandScheduler::clear() { return impl_->clear(); }
 
-std::vector<std::pair<core::frame_timecode, std::wstring>> AMCPCommandScheduler::list(core::frame_timecode& timecode)
+std::vector<std::tuple<int, core::frame_timecode, std::wstring>>
+AMCPCommandScheduler::list(int channel_index, core::frame_timecode& timecode)
 {
-    return impl_->list(timecode);
+    return impl_->list(channel_index, timecode);
+}
+
+std::vector<std::tuple<int, core::frame_timecode, std::wstring>> AMCPCommandScheduler::list_all()
+{
+    return impl_->list_all();
 }
 
 boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>>

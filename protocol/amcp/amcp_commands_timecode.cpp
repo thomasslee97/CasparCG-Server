@@ -24,7 +24,6 @@
 #include "amcp_command_context.h"
 #include "amcp_commands_timecode.h"
 #include "core/producer/frame_producer.h"
-#include "core/producer/timecode_source.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
@@ -70,23 +69,37 @@ std::wstring schedule_clear_command(command_context& ctx)
     return L"202 SCHEDULE CLEAR OK\r\n";
 }
 
-std::wstring schedule_list_command(command_context& ctx)
+std::wstring schedule_list_format(const std::vector<std::tuple<int, core::frame_timecode, std::wstring>> data)
 {
-    auto timecode = core::frame_timecode::empty();
-    if (!ctx.parameters.empty()) { // && !core::frame_timecode::parse_string(ctx.parameters.at(0), fps, timecode)) { //
-                                   // TODO - fix this
-        return L"403 SCHEDULE LIST ERROR\r\n";
-    }
-
     std::wstringstream replyString;
     replyString << L"200 SCHEDULE LIST OK\r\n";
 
-    for (auto entry : ctx.static_context->scheduler->list(timecode)) {
-        replyString << entry.first.string() << L" " << entry.second << "\r\n";
+    for (auto entry : data) {
+        replyString << std::get<0>(entry) << L" " << std::get<1>(entry).string() << L" " << std::get<2>(entry) << "\r\n";
     }
 
     replyString << L"\r\n";
     return replyString.str();
+}
+
+std::wstring schedule_list_command(command_context& ctx)
+{
+    if (ctx.parameters.empty()) {
+        return schedule_list_format(ctx.static_context->scheduler->list_all());
+    }
+
+    const int index = boost::lexical_cast<int>(ctx.parameters.at(0)) - 1;
+    if (ctx.channels.size() <= index) {
+        return L"403 SCHEDULE LIST ERROR\r\n";
+    }
+
+    auto          timecode = core::frame_timecode::empty();
+    const uint8_t fps      = static_cast<uint8_t>(round(ctx.channels[index].raw_channel->video_format_desc().fps));
+    if (ctx.parameters.size() > 1 && !core::frame_timecode::parse_string(ctx.parameters.at(1), fps, timecode)) {
+        return L"403 SCHEDULE LIST ERROR\r\n";
+    }
+
+    return schedule_list_format(ctx.static_context->scheduler->list(index, timecode));
 }
 
 std::wstring schedule_info_command(command_context& ctx)

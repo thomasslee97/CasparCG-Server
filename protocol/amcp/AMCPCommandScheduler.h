@@ -43,7 +43,8 @@ class AMCPCommandScheduler
 
     void clear();
 
-    std::vector<std::pair<core::frame_timecode, std::wstring>> list(core::frame_timecode& timecode);
+    std::vector<std::tuple<int, core::frame_timecode, std::wstring>> list(int channel_index, core::frame_timecode& timecode);
+    std::vector<std::tuple<int, core::frame_timecode, std::wstring>> list_all();
 
     std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> find(const std::wstring& token);
 
