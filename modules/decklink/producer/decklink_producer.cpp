@@ -241,16 +241,18 @@ class decklink_producer
 
             auto new_timecode = core::frame_timecode::empty();
 
-            IDeckLinkTimecode* tc; // TODO - determine type based on video format and give the user some control too.
-            if (SUCCEEDED(video->GetTimecode(BMDTimecodeFormat::bmdTimecodeRP188Any, &tc)) && tc) {
-                uint8_t hours, minutes, seconds, frames;
-                if (SUCCEEDED(tc->GetComponents(&hours, &minutes, &seconds, &frames))) {
-                    const uint8_t fps = static_cast<uint8_t>(ceil(in_format_desc_.fps));
-                    if (core::frame_timecode::create(hours, minutes, seconds, frames, fps, new_timecode)) 
-                        monitor_subject_ << core::monitor::message("/file/timecode") % new_timecode.string();
-                }
+            {
+                IDeckLinkTimecode* tc;
+                if (SUCCEEDED(video->GetTimecode(bmdTimecodeRP188Any, &tc)) && tc) {
+                    uint8_t hours, minutes, seconds, frames;
+                    if (SUCCEEDED(tc->GetComponents(&hours, &minutes, &seconds, &frames))) {
+                        const uint8_t fps = static_cast<uint8_t>(ceil(in_format_desc_.fps));
+                        if (core::frame_timecode::create(hours, minutes, seconds, frames, fps, new_timecode))
+                            monitor_subject_ << core::monitor::message("/file/timecode") % new_timecode.string();
+                    }
 
-                tc->Release();
+                    tc->Release();
+                }
             }
 
             monitor_subject_ << core::monitor::message("/file/name") % model_name_
@@ -302,7 +304,7 @@ class decklink_producer
             // POLL
 
             for (auto frame = muxer_.poll(); frame != core::draw_frame::empty(); frame = muxer_.poll()) {
-                auto val = std::make_pair(new_timecode, frame); // TODO - adjust to account for framerate difference?
+                auto val = std::make_pair(new_timecode, frame);
                 if (!frame_buffer_.try_push(val)) {
                     auto dummy = std::make_pair(core::frame_timecode::empty(), core::draw_frame::empty());
                     frame_buffer_.try_pop(dummy);
@@ -337,8 +339,7 @@ class decklink_producer
         if (!frame_buffer_.try_pop(frame)) {
             last_frame_ = std::make_pair(core::frame_timecode::empty(), last_frame_.second);
             graph_->set_tag(diagnostics::tag_severity::WARNING, "late-frame");
-        }
-        else
+        } else
             last_frame_ = frame;
 
         graph_->set_value("output-buffer",
@@ -358,7 +359,7 @@ class decklink_producer
     core::monitor::subject& monitor_output() { return monitor_subject_; }
 
     const core::frame_timecode& timecode() const { return last_frame_.first; }
-    bool has_timecode() const { return last_frame_.first != core::frame_timecode::empty(); }
+    bool                        has_timecode() const { return last_frame_.first != core::frame_timecode::empty(); }
 };
 
 class decklink_producer_proxy : public core::frame_producer_base

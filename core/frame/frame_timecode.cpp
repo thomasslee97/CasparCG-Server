@@ -48,7 +48,7 @@ uint32_t validate(uint32_t frames, uint8_t fps)
 frame_timecode validate(const frame_timecode& timecode, const int delta)
 {
     const int max_frames = timecode.max_frames();
-    int val = timecode.total_frames() + delta;
+    int       val        = timecode.total_frames() + delta;
     val %= max_frames;
     if (val < 0)
         val += max_frames;
@@ -128,7 +128,7 @@ int64_t frame_timecode::pts() const
 const std::wstring frame_timecode::string() const
 {
     uint8_t hours, minutes, seconds, frames;
-    get_components(hours, minutes, seconds, frames, true); // TODO frames valid smpte format?
+    get_components(hours, minutes, seconds, frames, true);
     return (boost::wformat(L"%02i:%02i:%02i:%02i") % hours % minutes % seconds % frames).str();
 }
 
@@ -154,7 +154,11 @@ bool frame_timecode::parse_string(const std::wstring& str, uint8_t fps, frame_ti
         const uint8_t hours   = static_cast<uint8_t>(std::stoi(strs[0]));
         const uint8_t minutes = static_cast<uint8_t>(std::stoi(strs[1]));
         const uint8_t seconds = static_cast<uint8_t>(std::stoi(strs[2]));
-        const uint8_t frames  = static_cast<uint8_t>(std::stoi(strs[3]));
+        uint8_t frames  = static_cast<uint8_t>(std::stoi(strs[3]));
+
+        // smpte doesn't handle high-p
+        if (fps > 30)
+            frames *= 2;
 
         return create(hours, minutes, seconds, frames, fps, res);
     } catch (...) {
@@ -192,16 +196,37 @@ bool frame_timecode::operator<(const frame_timecode& other) const { return pts()
 bool frame_timecode::operator>(const frame_timecode& other) const { return pts() > other.pts(); }
 bool frame_timecode::operator<=(const frame_timecode& other) const { return pts() <= other.pts(); }
 bool frame_timecode::operator>=(const frame_timecode& other) const { return pts() >= other.pts(); }
-bool frame_timecode::operator==(const frame_timecode& other) const { return pts() == other.pts() && fps_ == other.fps_; }
-bool frame_timecode::operator!=(const frame_timecode& other) const { return pts() != other.pts() || fps_ != other.fps_; }
+bool frame_timecode::operator==(const frame_timecode& other) const
+{
+    return pts() == other.pts() && fps_ == other.fps_;
+}
+bool frame_timecode::operator!=(const frame_timecode& other) const
+{
+    return pts() != other.pts() || fps_ != other.fps_;
+}
 
 frame_timecode frame_timecode::operator+=(int delta) { return *this = validate(*this, delta); }
 frame_timecode frame_timecode::operator-=(int delta) { return *this = validate(*this, -delta); }
 frame_timecode frame_timecode::operator+(int delta) const { return validate(*this, delta); }
 frame_timecode frame_timecode::operator-(int delta) const { return validate(*this, -delta); }
 
-frame_timecode frame_timecode::operator-(const frame_timecode& other) const { return validate(*this, -static_cast<int>(other.total_frames())); }
-frame_timecode frame_timecode::operator+(const frame_timecode& other) const { return validate(*this, other.total_frames()); }
+frame_timecode frame_timecode::operator-(const frame_timecode& other) const
+{
+    return validate(*this, -static_cast<int>(other.total_frames()));
+}
+frame_timecode frame_timecode::operator+(const frame_timecode& other) const
+{
+    return validate(*this, other.total_frames());
+}
+
+frame_timecode frame_timecode::with_fps(uint8_t new_fps) const
+{
+    if (new_fps == fps_)
+        return *this;
+
+    const int64_t frames = pts() * new_fps / 1000;
+    return frame_timecode(static_cast<uint32_t>(frames), new_fps);
+}
 
 bool frame_timecode::is_between(const frame_timecode& start, const frame_timecode& end) const
 {

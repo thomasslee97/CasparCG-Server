@@ -322,8 +322,7 @@ struct AMCPCommandScheduler::Impl
     boost::optional<std::vector<std::shared_ptr<AMCPGroupCommand>>> schedule(int                         channel_index,
                                                                              const core::frame_timecode& timecode)
     {
-        // TODO - tweak this timeout
-        // Timeout on lock aquiring. This is to stop channel output stalling
+        // Timeout on lock aquiring. This is to stop channel output stalling if another channel is taking too long
         timeout_lock lock(lock_, 5);
         if (!lock.is_locked())
             return boost::none;

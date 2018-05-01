@@ -69,7 +69,7 @@ std::wstring AMCPGroupCommand::name() const
         return commands_.at(0)->name();
     }
 
-    return L"BATCH"; // TODO include count
+    return L"BATCH";
 }
 
 }}} // namespace caspar::protocol::amcp

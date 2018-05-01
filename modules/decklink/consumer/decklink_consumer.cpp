@@ -302,12 +302,13 @@ class decklink_frame : public IDeckLinkVideoFrame
 
     virtual HRESULT STDMETHODCALLTYPE GetTimecode(BMDTimecodeFormat format, IDeckLinkTimecode** timecode)
     {
+        // TODO - handle drop frame
+
         if (format == bmdTimecodeRP188VITC2 || format == bmdTimecodeVITCField2) {
             *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault | bmdTimecodeFieldMark);
             return S_OK;
         }
 
-        // TODO - need to handle drop frame, interlaced etc
         *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault);
         return S_OK;
     }
@@ -353,7 +354,8 @@ struct key_video_context
     template <typename Print>
     void enable_video(BMDDisplayMode display_mode, const Print& print)
     {
-        if (FAILED(output_->EnableVideoOutput(display_mode, bmdVideoOutputRP188))) // TODO - variable timecode type
+        if (FAILED(output_->EnableVideoOutput(
+                display_mode, static_cast<BMDVideoOutputFlags>(bmdVideoOutputRP188 | bmdVideoOutputVITC))))
             CASPAR_THROW_EXCEPTION(caspar_exception() << msg_info(print() + L" Could not enable key video output."));
 
         if (FAILED(output_->SetScheduledFrameCompletionCallback(this)))
@@ -521,7 +523,8 @@ struct decklink_consumer
 
     void enable_video(BMDDisplayMode display_mode)
     {
-        if (FAILED(output_->EnableVideoOutput(display_mode, bmdVideoOutputRP188))) // TODO - dynamic flags
+        if (FAILED(output_->EnableVideoOutput(
+                display_mode, static_cast<BMDVideoOutputFlags>(bmdVideoOutputRP188 | bmdVideoOutputVITC))))
             CASPAR_THROW_EXCEPTION(caspar_exception() << msg_info(print() + L" Could not enable fill video output."));
 
         if (FAILED(output_->SetScheduledFrameCompletionCallback(this)))

@@ -1232,7 +1232,7 @@ std::future<std::wstring> reply_value(command_context& ctx, const Func& extracto
     auto transform = get_current_transform(ctx).share();
 
     return std::async(std::launch::deferred, [transform, extractor]() -> std::wstring {
-        auto value  = extractor(transform.get());
+        auto value = extractor(transform.get());
 
         return L"201 MIXER OK\r\n" + boost::lexical_cast<std::wstring>(value) + L"\r\n";
     });
@@ -1495,7 +1495,8 @@ std::future<std::wstring> mixer_blend_command(command_context& ctx)
 }
 
 template <typename Getter, typename Setter>
-std::future<std::wstring> single_double_animatable_mixer_command(command_context& ctx, const Getter& getter, const Setter& setter)
+std::future<std::wstring>
+single_double_animatable_mixer_command(command_context& ctx, const Getter& getter, const Setter& setter)
 {
     if (ctx.parameters.empty())
         return reply_value(ctx, getter);
@@ -2785,18 +2786,25 @@ void info_delay_describer(core::help_sink& sink, const core::help_repository& re
     sink.para()->text(L"Get the current delay on the specified channel or layer.");
 }
 
-std::wstring info_delay_command(command_context& ctx)
+std::future<std::wstring> info_delay_command(command_context& ctx)
 {
-    boost::property_tree::wptree info;
-    auto                         layer = ctx.layer_index(std::numeric_limits<int>::min());
+    auto layer = ctx.layer_index(std::numeric_limits<int>::min());
 
-    if (layer == std::numeric_limits<int>::min())
+    if (layer == std::numeric_limits<int>::min()) {
+        boost::property_tree::wptree info;
         info.add_child(L"channel-delay", ctx.channel.raw_channel->delay_info());
-    else
-        info.add_child(L"layer-delay", ctx.channel.stage->delay_info(layer).get())
-            .add(L"index", layer); // TODO - deadlock while batch?
+        return make_ready_future(create_info_xml_reply(info, L"DELAY"));
+    }
 
-    return create_info_xml_reply(info, L"DELAY");
+    auto layer_info = ctx.channel.stage->delay_info(layer).share();
+    return std::async(std::launch::deferred, [layer_info, layer]() {
+        boost::property_tree::wptree info;
+
+        info.add_child(L"layer-delay", layer_info.get()).add(L"index", layer);
+
+        return create_info_xml_reply(info, L"DELAY");
+    });
+
 }
 
 void diag_describer(core::help_sink& sink, const core::help_repository& repo)

@@ -121,12 +121,12 @@ struct channel_timecode::impl
             }
 
             if (tc.is_valid()) {
-                timecode_ = tc; // TODO - adjust to match fps
+                timecode_ = tc.with_fps(timecode_.fps());
                 update_offset(tc);
                 return timecode_;
             }
 
-            // fall back to incrmenting
+            // fall back to incrementing
             CASPAR_LOG(warning) << L"timecode[" << index_ << L"] - Timecode update invalid. Ignoring";
         }
 
@@ -149,9 +149,8 @@ struct channel_timecode::impl
 
     void change_format(const video_format_desc& format)
     {
+        // Timecode will be updated on next channel tick
         format_ = format;
-
-        // TODO - update current to match fps
     }
 
     bool is_free() const

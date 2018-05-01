@@ -576,6 +576,10 @@ std::future<void>
 stage_delayed::swap_layer(int index, int other_index, const std::shared_ptr<stage_base>& other, bool swap_transforms)
 {
     const auto other2 = std::static_pointer_cast<stage_delayed>(other);
+    
+    // Something so that we know to lock the channel
+    other2->executor_.begin_invoke([]() {});
+
     return executor_.begin_invoke(
         [=]() { return stage_->swap_layer(index, other_index, other2->stage_, swap_transforms).get(); });
 }

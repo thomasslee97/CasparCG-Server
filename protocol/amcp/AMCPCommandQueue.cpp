@@ -119,7 +119,7 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
     }
 
     caspar::timer timer;
-    CASPAR_LOG(warning) << "Executing batch: " << cmd->name();
+    CASPAR_LOG(warning) << "Executing batch: " << cmd->name() << L"(" << cmd->Commands().size() << L" commands)";
 
     std::vector<channel_context>                      delayed_channels;
     std::vector<std::shared_ptr<core::stage_delayed>> delayed_stages;
@@ -142,8 +142,7 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
 
         // lock all the channels needed
         for (auto& st : delayed_stages) {
-            if (st->count_queued() <= 1) {
-                // just the waiter
+            if (st->count_queued() == 0) {
                 continue;
             }
 
@@ -165,10 +164,9 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
 
     // wait for the commands to finish
     for (auto& st : delayed_stages) {
-        // TODO - move the locks to inside stage_delayed so that it can be released once the channel is done
-        // TODO - when doing so, make sure that a swap locks on the delay executor too, to make sure it works
         st->wait();
     }
+    // TODO - it would be good to move the lock clearing into the executor, but that will cause issues with swap as they will unlock early
     channel_locks.clear();
 
     int failed = 0;
@@ -178,7 +176,7 @@ void AMCPCommandQueue::Execute(std::shared_ptr<AMCPGroupCommand> cmd) const
     }
 
     if (failed > 0)
-        cmd->SendReply(L"202 COMMIT PARTIAL\r\n"); // TODO report failed count?
+        cmd->SendReply(L"202 COMMIT PARTIAL\r\n"); // TODO report failed count/info
     else
         cmd->SendReply(L"202 COMMIT OK\r\n");
 
