@@ -44,7 +44,6 @@
 #include <common/linq.h>
 #include <common/timer.h>
 
-#include <boost/circular_buffer.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -61,7 +60,6 @@ struct output::impl
 	audio_channel_layout				channel_layout_;
 	std::map<int, port>					ports_;
 	prec_timer							sync_timer_;
-	boost::circular_buffer<const_frame>	frames_;
 	std::map<int, int64_t>				send_to_consumers_delays_;
 	executor							executor_					{ L"output " + boost::lexical_cast<std::wstring>(channel_index_) };
 public:
@@ -139,20 +137,7 @@ public:
 
 			format_desc_ = format_desc;
 			channel_layout_ = channel_layout;
-			frames_.clear();
 		});
-	}
-
-	std::pair<int, int> minmax_buffer_depth() const
-	{
-		if(ports_.empty())
-			return std::make_pair(0, 0);
-
-		return cpplinq::from(ports_)
-			.select(values())
-			.select(std::mem_fn(&port::buffer_depth))
-			.where([](int v) { return v >= 0; })
-			.aggregate(minmax::initial_value<int>(), minmax());
 	}
 
 	bool has_synchronization_clock() const
@@ -180,28 +165,18 @@ public:
 				return nullptr;
 			}
 
-			auto minmax = minmax_buffer_depth();
-
-			frames_.set_capacity(std::max(2, minmax.second - minmax.first) + 1); // std::max(2, x) since we want to guarantee some pipeline depth for asycnhronous mixer read-back.
-			frames_.push_back(input_frame);
-
-			if (!frames_.full())
-				return nullptr;
-
 			spl::shared_ptr<std::map<int, std::future<bool>>> send_results;
 
 			// Start invocations
 			for (auto it = ports_.begin(); it != ports_.end();)
 			{
 				auto& port = it->second;
-				auto depth = port.buffer_depth();
-				auto& frame = depth < 0 ? frames_.back() : frames_.at(depth - minmax.first);
 
-				send_to_consumers_delays_[it->first] = frame.get_age_millis();
+				send_to_consumers_delays_[it->first] = input_frame.get_age_millis();
 
 				try
 				{
-					send_results->insert(std::make_pair(it->first, port.send(timecode, frame)));
+					send_results->insert(std::make_pair(it->first, port.send(timecode, input_frame)));
 					++it;
 				}
 				catch (...)
@@ -209,7 +184,7 @@ public:
 					CASPAR_LOG_CURRENT_EXCEPTION();
 					try
 					{
-						send_results->insert(std::make_pair(it->first, port.send(timecode, frame)));
+						send_results->insert(std::make_pair(it->first, port.send(timecode, input_frame)));
 						++it;
 					}
 					catch (...)
