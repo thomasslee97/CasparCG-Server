@@ -45,6 +45,7 @@
 #include <tbb/parallel_for.h>
 
 #include <numeric>
+#include <boost/circular_buffer.hpp>
 
 #pragma warning(push)
 #pragma warning(disable: 4244)
@@ -231,16 +232,6 @@ public:
 		{
 			options_[(*it)["NAME"].str()] = (*it)["VALUE"].matched ? (*it)["VALUE"].str() : "";
 		}
-
-        if (options_.find("threads") == options_.end())
-            options_["threads"] = "auto";
-
-		tokens_.release(
-			std::max(
-				1,
-				try_remove_arg<int>(
-					options_,
-					boost::regex("tokens")).get_value_or(2)));
 	}
 
 	~ffmpeg_consumer()
@@ -283,7 +274,8 @@ public:
 
 	void initialize(
 			const core::video_format_desc& format_desc,
-			const core::audio_channel_layout& channel_layout)
+			const core::audio_channel_layout& channel_layout,
+                        const core::frame_timecode& start_timecode)
 	{
 		try
 		{
@@ -312,6 +304,15 @@ public:
 			graph_->set_text(print());
 			diagnostics::register_graph(graph_);
 
+                        if (options_.find("threads") == options_.end())
+                            options_["threads"] = "auto";
+
+		        const int thread_count = std::max(
+                            1,
+                            try_remove_arg<int>(
+                                options_,
+                                boost::regex("tokens")).get_value_or(2));
+
 			const auto oformat_name =
 				try_remove_arg<std::string>(
 					options_,
@@ -328,6 +329,15 @@ public:
 			oc_.reset(
 				oc,
 				avformat_free_context);
+
+
+                        if (start_timecode.is_valid())
+                        {
+                            av_dict_set(
+                                &oc_->metadata,
+                                "timecode",
+                                u8(start_timecode.string()).c_str(), 0);
+                        }
 
 			CASPAR_VERIFY(oc_->oformat);
 
@@ -447,6 +457,8 @@ public:
 
 				options_ = to_map(av_opts);
 			}
+
+                        tokens_.release(thread_count);
 
 			// Dump Info
 
@@ -1201,25 +1213,42 @@ public:
 	{
 	}
 
+    
+	void initialize(const core::video_format_desc&    format_desc,
+                        const core::audio_channel_layout& channel_layout,
+                        const core::frame_timecode&       start_timecode) const 
+        {
+		consumer_->initialize(format_desc, channel_layout, start_timecode);
+
+		if (separate_key_)
+		{
+			key_only_consumer_->initialize(format_desc, channel_layout, start_timecode);
+		}
+	}
+
+        void create_consumers()
+	{
+            if (consumer_)
+                CASPAR_THROW_EXCEPTION(invalid_operation() << msg_info("Cannot reinitialize ffmpeg-consumer."));
+
+            consumer_.reset(new ffmpeg_consumer(path_, options_, mono_streams_));
+
+            if (separate_key_)
+            {
+                boost::filesystem::path fill_file(path_);
+                auto without_extension = u16(fill_file.parent_path().string() + "/" + fill_file.stem().string());
+                auto key_file = without_extension + L"_A" + u16(fill_file.extension().string());
+
+                key_only_consumer_.reset(new ffmpeg_consumer(u8(key_file), options_, mono_streams_));
+            }
+	}
+
 	void initialize(const core::video_format_desc&    format_desc,
                         const core::audio_channel_layout& channel_layout,
                         int) override
 	{
-		if (consumer_)
-			CASPAR_THROW_EXCEPTION(invalid_operation() << msg_info("Cannot reinitialize ffmpeg-consumer."));
-
-		consumer_.reset(new ffmpeg_consumer(path_, options_, mono_streams_));
-		consumer_->initialize(format_desc, channel_layout);
-
-		if (separate_key_)
-		{
-			boost::filesystem::path fill_file(path_);
-			auto without_extension = u16(fill_file.parent_path().string() + "/" + fill_file.stem().string());
-			auto key_file = without_extension + L"_A" + u16(fill_file.extension().string());
-
-			key_only_consumer_.reset(new ffmpeg_consumer(u8(key_file), options_, mono_streams_));
-			key_only_consumer_->initialize(format_desc, channel_layout);
-		}
+            create_consumers();
+            initialize(format_desc, channel_layout, core::frame_timecode::empty());
 	}
 
 	int64_t presentation_frame_age_millis() const override
@@ -1229,12 +1258,7 @@ public:
 
 	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
-		bool ready_for_frame = consumer_->ready_for_frame();
-
-		if (ready_for_frame && separate_key_)
-			ready_for_frame = ready_for_frame && key_only_consumer_->ready_for_frame();
-
-		if (ready_for_frame)
+		if (ready_for_frame())
 		{
 			consumer_->send(frame);
 
@@ -1243,13 +1267,28 @@ public:
 		}
 		else
 		{
-			consumer_->mark_dropped();
-
-			if (separate_key_)
-				key_only_consumer_->mark_dropped();
+                    mark_dropped();
 		}
 
 		return make_ready_future(true);
+	}
+
+        bool ready_for_frame() const {
+             if (!consumer_ || !consumer_->ready_for_frame())
+                 return false;
+
+             if (separate_key_)
+                 return key_only_consumer_ && key_only_consumer_->ready_for_frame();
+
+             return true;
+	}
+
+        void mark_dropped() const
+	{
+            consumer_->mark_dropped();
+
+            if (separate_key_)
+                key_only_consumer_->mark_dropped();
 	}
 
 	std::wstring print() const override
@@ -1295,6 +1334,66 @@ public:
 	}
 };
 
+    
+
+struct ffmpeg_consumer_with_timecode_proxy : public ffmpeg_consumer_proxy
+{
+    bool initialized_;
+    boost::circular_buffer<std::pair<core::frame_timecode, core::const_frame>> frames_; // TODO - not right type for this. we dont want to wipe old data (or do we?)
+
+    core::video_format_desc format_desc_;
+    core::audio_channel_layout channel_layout_ = core::audio_channel_layout::invalid();
+    std::future<void> is_ready_;
+
+public:
+
+    ffmpeg_consumer_with_timecode_proxy(const std::string& path, const std::string& options, bool separate_key, bool mono_streams, bool compatibility_mode)
+		: ffmpeg_consumer_proxy(path, options, separate_key, mono_streams, compatibility_mode)
+                , initialized_(false)
+	{
+	}
+
+	void initialize(const core::video_format_desc&    format_desc,
+                        const core::audio_channel_layout& channel_layout,
+                        int) override
+	{
+            format_desc_ = format_desc;
+            channel_layout_ = channel_layout;
+
+            frames_.set_capacity(8);
+            create_consumers();
+	}
+
+	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
+	{
+                if (frames_.size() == frames_.capacity())
+                {
+                    //mark_dropped();
+                    // TODO - doesnt detect drops properly
+                }
+
+                frames_.push_back(std::make_pair(timecode, frame));
+
+                if (!initialized_)
+                {
+                    initialized_ = true;
+
+                    is_ready_= std::async(std::launch::async, [=]()
+                    {
+                        ffmpeg_consumer_proxy::initialize(format_desc_, channel_layout_, timecode);
+                    });
+                }
+
+                if (!ready_for_frame())
+                {
+                    return make_ready_future(true);
+                }
+
+	        const std::pair<core::frame_timecode, core::const_frame> send_frame = frames_.back();
+                return ffmpeg_consumer_proxy::send(send_frame.first, send_frame.second);
+	}
+};
+
 void describe_ffmpeg_consumer(core::help_sink& sink, const core::help_repository& repo)
 {
 	sink.short_description(L"For streaming/recording the contents of a channel using FFmpeg.");
@@ -1326,6 +1425,7 @@ spl::shared_ptr<core::frame_consumer> create_ffmpeg_consumer(
 	auto params2			= params;
 	bool separate_key		= get_and_consume_flag(L"SEPARATE_KEY", params2);
 	bool mono_streams		= get_and_consume_flag(L"MONO_STREAMS", params2);
+        bool with_timecode              = get_and_consume_flag(L"WITH_TIMECODE", params2);
 	auto compatibility_mode	= boost::iequals(params.at(0), L"FILE");
 	auto path				= u8(params2.size() > 1 ? params2.at(1) : L"");
 
@@ -1338,6 +1438,11 @@ spl::shared_ptr<core::frame_consumer> create_ffmpeg_consumer(
 
 	// join only the args
 	auto args				= u8(boost::join(params2, L" "));
+
+        if (with_timecode)
+        {
+            return spl::make_shared<ffmpeg_consumer_with_timecode_proxy>(path, args, separate_key, mono_streams, compatibility_mode);
+        }
 
 	return spl::make_shared<ffmpeg_consumer_proxy>(path, args, separate_key, mono_streams, compatibility_mode);
 }
