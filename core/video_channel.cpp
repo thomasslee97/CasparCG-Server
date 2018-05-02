@@ -187,14 +187,14 @@ struct video_channel::impl final
 
             // Predict the new timecode for any producers to use
 
-            timecode_->tick();
+            timecode_->tick(false);
 
             // Produce
 
             auto stage_frames = (*stage_)(format_desc);
 
             // Ensure it is accurate now the producer has run
-            auto timecode = timecode_->tick();
+            auto timecode = timecode_->tick(true);
 
             // Schedule commands for next timecode
             invoke_timecode_listeners(timecode);

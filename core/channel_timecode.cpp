@@ -111,9 +111,9 @@ struct channel_timecode::impl
 
     void start() { update_offset(core::frame_timecode::empty()); }
 
-    frame_timecode tick()
+    frame_timecode tick(bool use_producer)
     {
-        if (!is_free()) {
+        if (use_producer && !is_free()) {
             frame_timecode tc;
             {
                 std::unique_lock<std::mutex> lock(source_lock_);
@@ -245,7 +245,7 @@ channel_timecode::channel_timecode(int index, const video_format_desc& format)
 }
 
 void           channel_timecode::start() { impl_->start(); }
-frame_timecode channel_timecode::tick() { return impl_->tick(); }
+frame_timecode channel_timecode::tick(bool use_producer) { return impl_->tick(use_producer); }
 
 frame_timecode channel_timecode::timecode() const { return impl_->timecode(); }
 void           channel_timecode::timecode(frame_timecode& tc) { impl_->timecode(tc); }

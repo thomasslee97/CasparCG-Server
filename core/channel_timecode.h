@@ -35,7 +35,7 @@ class channel_timecode
 
     void start();
 
-    frame_timecode tick();
+    frame_timecode tick(bool use_producer);
 
     frame_timecode timecode() const;
     void           timecode(frame_timecode& tc);
