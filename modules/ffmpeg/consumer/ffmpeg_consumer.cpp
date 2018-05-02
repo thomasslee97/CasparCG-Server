@@ -333,10 +333,14 @@ public:
 
                         if (start_timecode.is_valid())
                         {
+                            core::frame_timecode tc = start_timecode;
+                            if (format_desc.field_mode != core::field_mode::progressive)
+                                tc += 1;
+
                             av_dict_set(
                                 &oc_->metadata,
                                 "timecode",
-                                u8(start_timecode.string()).c_str(), 0);
+                                u8(tc.string()).c_str(), 0);
                         }
 
 			CASPAR_VERIFY(oc_->oformat);
@@ -1339,7 +1343,7 @@ public:
 struct ffmpeg_consumer_with_timecode_proxy : public ffmpeg_consumer_proxy
 {
     bool initialized_;
-    boost::circular_buffer<std::pair<core::frame_timecode, core::const_frame>> frames_; // TODO - not right type for this. we dont want to wipe old data (or do we?)
+    std::queue<std::pair<core::frame_timecode, core::const_frame>> frames_;
 
     core::video_format_desc format_desc_;
     core::audio_channel_layout channel_layout_ = core::audio_channel_layout::invalid();
@@ -1360,19 +1364,18 @@ public:
             format_desc_ = format_desc;
             channel_layout_ = channel_layout;
 
-            frames_.set_capacity(8);
             create_consumers();
 	}
 
 	std::future<bool> send(core::frame_timecode timecode, core::const_frame frame) override
 	{
-                if (frames_.size() == frames_.capacity())
+                if (frames_.size() >= 8) // Don't buffer too much
                 {
-                    //mark_dropped();
-                    // TODO - doesnt detect drops properly
+                    mark_dropped();
+                    frames_.pop();
                 }
 
-                frames_.push_back(std::make_pair(timecode, frame));
+                frames_.push(std::make_pair(timecode, frame));
 
                 if (!initialized_)
                 {
@@ -1382,6 +1385,7 @@ public:
                     {
                         ffmpeg_consumer_proxy::initialize(format_desc_, channel_layout_, timecode);
                     });
+                    return make_ready_future(true);
                 }
 
                 if (!ready_for_frame())
@@ -1390,6 +1394,8 @@ public:
                 }
 
 	        const std::pair<core::frame_timecode, core::const_frame> send_frame = frames_.back();
+                frames_.pop();
+
                 return ffmpeg_consumer_proxy::send(send_frame.first, send_frame.second);
 	}
 };
