@@ -56,7 +56,7 @@ class AMCPScheduledCommand
     std::shared_ptr<AMCPGroupCommand> create_command() const
     {
         std::vector<std::shared_ptr<AMCPCommand>> cmds;
-        for (const auto cmd : commands_) {
+        for (const auto& cmd : commands_) {
             cmds.push_back(cmd.second);
         }
 
@@ -67,7 +67,7 @@ class AMCPScheduledCommand
     {
         std::vector<std::pair<core::frame_timecode, std::wstring>> res;
 
-        for (const auto cmd : commands_) {
+        for (const auto& cmd : commands_) {
             res.push_back({timecode_, cmd.first});
         }
 
@@ -101,17 +101,16 @@ class AMCPCommandSchedulerQueue
         if (!command || token.empty() || timecode == core::frame_timecode::empty())
             return;
 
-        for (auto cmd : scheduled_commands_) {
+        for (auto& cmd : scheduled_commands_) {
             if (cmd->timecode() != timecode)
                 continue;
 
-            cmd->add(token, command);
+            cmd->add(token, std::move(command));
             return;
         }
 
         // No match, so queue command instead
-        auto sch_cmd = std::make_shared<AMCPScheduledCommand>(command, timecode, token);
-        scheduled_commands_.push_back(std::move(sch_cmd));
+        scheduled_commands_.push_back(std::make_shared<AMCPScheduledCommand>(std::move(command), timecode, token));
     }
 
     bool remove(const std::wstring& token)
@@ -142,8 +141,8 @@ class AMCPCommandSchedulerQueue
 
         const bool include_all = timecode == core::frame_timecode::empty();
 
-        for (auto command : scheduled_commands_) {
-            for (auto token : command->get_tokens()) {
+        for (auto& command : scheduled_commands_) {
+            for (auto& token : command->get_tokens()) {
                 if (include_all || timecode == token.first)
                     res.emplace_back(index_, token.first, token.second);
             }
@@ -154,7 +153,7 @@ class AMCPCommandSchedulerQueue
 
     std::pair<core::frame_timecode, std::shared_ptr<AMCPCommand>> find(const std::wstring& token)
     {
-        for (auto command : scheduled_commands_) {
+        for (auto& command : scheduled_commands_) {
             const auto cmd = command->find(token);
             if (cmd)
                 return std::make_pair(command->timecode(), cmd);
@@ -195,7 +194,7 @@ class AMCPCommandSchedulerQueue
         last_timecode_                                                    = timecode;
 
         for (int i = 0; i < scheduled_commands_.size(); i++) {
-            const auto cmd = scheduled_commands_[i];
+            const auto& cmd = scheduled_commands_[i];
             if (cmd->timecode().is_between(range.first, range.second)) {
                 res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
@@ -234,7 +233,7 @@ struct AMCPCommandScheduler::Impl
     {
         std::lock_guard<std::timed_mutex> lock(lock_);
 
-        for (auto queue : queues_) {
+        for (auto& queue : queues_) {
             queue->remove(token);
         }
 
@@ -248,7 +247,7 @@ struct AMCPCommandScheduler::Impl
 
         std::lock_guard<std::timed_mutex> lock(lock_);
 
-        for (auto queue : queues_) {
+        for (auto& queue : queues_) {
             if (queue->remove(token))
                 return true;
         }
@@ -260,7 +259,7 @@ struct AMCPCommandScheduler::Impl
     {
         std::lock_guard<std::timed_mutex> lock(lock_);
 
-        for (auto queue : queues_) {
+        for (auto& queue : queues_) {
             queue->clear();
         }
     }
@@ -280,8 +279,8 @@ struct AMCPCommandScheduler::Impl
         std::lock_guard<std::timed_mutex> lock(lock_);
         core::frame_timecode              timecode = core::frame_timecode::empty();
 
-        for (auto queue : queues_) {
-            for (auto token : queue->list(timecode)) {
+        for (auto& queue : queues_) {
+            for (auto& token : queue->list(timecode)) {
                 res.push_back(std::move(token));
             }
         }
@@ -293,7 +292,7 @@ struct AMCPCommandScheduler::Impl
     {
         std::lock_guard<std::timed_mutex> lock(lock_);
 
-        for (auto queue : queues_) {
+        for (auto& queue : queues_) {
             const auto res = queue->find(token);
             if (res.first != core::frame_timecode::empty())
                 return res;
@@ -314,7 +313,11 @@ struct AMCPCommandScheduler::Impl
         {
             locked_ = mutex_.try_lock_for(std::chrono::milliseconds(milliseconds));
         }
-        ~timeout_lock() { mutex_.unlock(); }
+        ~timeout_lock()
+        {
+            if (locked_)
+                mutex_.unlock();
+        }
 
         bool is_locked() const { return locked_; }
     };
