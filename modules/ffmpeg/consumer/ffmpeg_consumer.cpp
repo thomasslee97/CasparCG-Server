@@ -1410,7 +1410,8 @@ void describe_ffmpeg_consumer(core::help_sink& sink, const core::help_repository
 		->item(L"url",				L"If the filename is given in the form of an URL a network stream will be created instead of a file on disk.")
 		->item(L"ffmpeg_paramX",		L"A parameter supported by FFmpeg. For example vcodec or acodec etc.")
 		->item(L"separate_key",		L"If defined will create two files simultaneously -- One for fill and one for key (_A will be appended).")
-		->item(L"mono_streams",		L"If defined every audio channel will be written to its own audio stream.");
+		->item(L"mono_streams",		L"If defined every audio channel will be written to its own audio stream.")
+            	->item(L"no_timecode",          L"If defined the timecode metadata recorded to the file will not follow the channel timecode.");
 	sink.para()->text(L"Examples:");
 	sink.example(L">> ADD 1 FILE output.mov -vcodec dnxhd");
 	sink.example(L">> ADD 1 FILE output.mov -vcodec prores");
@@ -1431,7 +1432,7 @@ spl::shared_ptr<core::frame_consumer> create_ffmpeg_consumer(
 	auto params2			= params;
 	bool separate_key		= get_and_consume_flag(L"SEPARATE_KEY", params2);
 	bool mono_streams		= get_and_consume_flag(L"MONO_STREAMS", params2);
-        bool with_timecode              = get_and_consume_flag(L"WITH_TIMECODE", params2);
+        bool no_timecode                = get_and_consume_flag(L"NO_TIMECODE", params2);
 	auto compatibility_mode	= boost::iequals(params.at(0), L"FILE");
 	auto path				= u8(params2.size() > 1 ? params2.at(1) : L"");
 
@@ -1445,7 +1446,7 @@ spl::shared_ptr<core::frame_consumer> create_ffmpeg_consumer(
 	// join only the args
 	auto args				= u8(boost::join(params2, L" "));
 
-        if (with_timecode)
+        if (!no_timecode)
         {
             return spl::make_shared<ffmpeg_consumer_with_timecode_proxy>(path, args, separate_key, mono_streams, compatibility_mode);
         }
