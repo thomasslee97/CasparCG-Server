@@ -89,10 +89,11 @@ void AMCPCommandQueue::AddCommand(std::shared_ptr<AMCPGroupCommand> pCurrentComm
         try {
             CASPAR_LOG(error) << "AMCP Command Queue Overflow.";
             CASPAR_LOG(error) << "Failed to execute command:" << pCurrentCommand->name();
-            pCurrentCommand->SendReply(L"500 FAILED\r\n");
+            pCurrentCommand->SendReply(L"504 QUEUE OVERFLOW\r\n");
         } catch (...) {
             CASPAR_LOG_CURRENT_EXCEPTION();
         }
+        return;
     }
 
     executor_.begin_invoke([=] {
