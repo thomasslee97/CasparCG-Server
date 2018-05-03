@@ -61,8 +61,6 @@ struct frame_timecode
 
     frame_timecode with_fps(uint8_t new_fps) const;
 
-    bool is_between(const frame_timecode& start, const frame_timecode& end) const;
-
     bool is_valid() const { return fps_ != 0; }
     
   private:

@@ -228,13 +228,4 @@ frame_timecode frame_timecode::with_fps(uint8_t new_fps) const
     return frame_timecode(static_cast<uint32_t>(frames), new_fps);
 }
 
-bool frame_timecode::is_between(const frame_timecode& start, const frame_timecode& end) const
-{
-    // Range crosses wrap point
-    if (start > end)
-        return *this <= end || *this >= start;
-
-    return *this <= end && *this >= start;
-}
-
 }} // namespace caspar::core

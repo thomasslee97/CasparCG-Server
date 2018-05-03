@@ -162,11 +162,36 @@ class AMCPCommandSchedulerQueue
         return std::make_pair(core::frame_timecode::empty(), nullptr);
     }
 
-    std::pair<core::frame_timecode, core::frame_timecode> find_range(const core::frame_timecode& timecode) const
+    struct timecode_range
+    {
+    private:
+        const int64_t start_;
+        const int64_t end_;
+        const bool wraps_;
+    public:
+        timecode_range(const core::frame_timecode& start, const core::frame_timecode& end)
+            : start_(start.pts())
+            , end_(end.pts())
+            , wraps_(start_ > end_)
+        {
+        }
+
+        bool is_in_range(const core::frame_timecode& timecode) const
+        {
+            const int64_t pts = timecode.pts();
+
+            if (wraps_)
+                return pts <= end_ || pts >= start_;
+
+            return pts <= end_ && pts >= start_;
+        }
+    };
+
+    timecode_range find_range(const core::frame_timecode& timecode) const
     {
         // if fps mismatch, then go with one frame
         if (last_timecode_.fps() != timecode.fps())
-            return std::make_pair(timecode, timecode + 1);
+            return timecode_range(timecode, timecode + 1);
 
         int delta = static_cast<int>(((timecode + 1) - last_timecode_).total_frames());
         if (delta >= static_cast<int>(last_timecode_.max_frames()) / 2)
@@ -175,10 +200,10 @@ class AMCPCommandSchedulerQueue
         if (delta > last_timecode_.fps() || delta < 0) {
             CASPAR_LOG(warning) << L"timecode[" << index_ << L"] jump detected. Skipping scheduling for: "
                                 << last_timecode_.string() << L" to " << (timecode + 1).string();
-            return std::make_pair(timecode, timecode + 1);
+            return timecode_range(timecode, timecode + 1);
         }
 
-        return std::make_pair(last_timecode_, timecode + 1);
+        return timecode_range(last_timecode_, timecode + 1);
     }
 
     std::vector<std::shared_ptr<AMCPGroupCommand>> schedule(const core::frame_timecode& timecode)
@@ -190,12 +215,12 @@ class AMCPCommandSchedulerQueue
             return res;
         }
 
-        const std::pair<core::frame_timecode, core::frame_timecode> range = find_range(timecode);
-        last_timecode_                                                    = timecode;
+        timecode_range range = find_range(timecode);
+        last_timecode_ = timecode;
 
         for (int i = 0; i < scheduled_commands_.size(); i++) {
             const auto& cmd = scheduled_commands_[i];
-            if (cmd->timecode().is_between(range.first, range.second)) {
+            if (range.is_in_range(cmd->timecode())) {
                 res.push_back(std::move(cmd->create_command()));
                 scheduled_commands_.erase(scheduled_commands_.begin() + i);
                 --i;
