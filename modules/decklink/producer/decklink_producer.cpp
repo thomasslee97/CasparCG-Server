@@ -109,6 +109,7 @@ class decklink_producer
 
     const std::wstring model_name_ = get_model_name(decklink_);
     const std::wstring filter_;
+    bool               freeze_on_lost_;
 
     core::video_format_desc              in_format_desc_;
     core::video_format_desc              out_format_desc_;
@@ -129,6 +130,7 @@ class decklink_producer
     tbb::concurrent_bounded_queue<std::pair<core::frame_timecode, core::draw_frame>> frame_buffer_;
     std::pair<core::frame_timecode, core::draw_frame>                                last_frame_ =
         std::make_pair(core::frame_timecode::empty(), core::draw_frame::empty());
+    bool                                                                             has_signal_;
 
     std::exception_ptr exception_;
 
@@ -138,9 +140,11 @@ class decklink_producer
                       const spl::shared_ptr<core::frame_factory>& frame_factory,
                       const core::video_format_desc&              out_format_desc,
                       const core::audio_channel_layout&           channel_layout,
-                      const std::wstring&                         filter)
+                      const std::wstring&                         filter,
+                      bool                                        freeze_on_lost)
         : device_index_(device_index)
         , filter_(filter)
+        , freeze_on_lost_(freeze_on_lost)
         , in_format_desc_(in_format_desc)
         , out_format_desc_(out_format_desc)
         , frame_factory_(frame_factory)
@@ -220,6 +224,18 @@ class decklink_producer
             graph_->set_value("tick-time", tick_timer_.elapsed() * out_format_desc_.fps * 0.5);
             tick_timer_.restart();
 
+            const auto flags = video->GetFlags();
+            has_signal_ = !(flags & bmdFrameHasNoInputSource);
+            
+            monitor_subject_ << core::monitor::message("/file/name") % model_name_
+                             << core::monitor::message("/file/path") % device_index_
+                             << core::monitor::message("/file/has_signal") % has_signal_;
+
+            if (freeze_on_lost_ && !has_signal_)
+            {
+                return S_OK;
+            }
+
             caspar::timer frame_timer;
 
             // Video
@@ -255,9 +271,7 @@ class decklink_producer
                 }
             }
 
-            monitor_subject_ << core::monitor::message("/file/name") % model_name_
-                             << core::monitor::message("/file/path") % device_index_
-                             << core::monitor::message("/file/video/width") % video->GetWidth()
+            monitor_subject_ << core::monitor::message("/file/video/width") % video->GetWidth()
                              << core::monitor::message("/file/video/height") % video->GetHeight()
                              << core::monitor::message("/file/video/field") %
                                     u8(!video_frame->interlaced_frame
@@ -337,7 +351,7 @@ class decklink_producer
         auto frame = last_frame_;
 
         if (!frame_buffer_.try_pop(frame)) {
-            last_frame_ = std::make_pair(core::frame_timecode::empty(), last_frame_.second);
+            frame = std::make_pair(core::frame_timecode::empty(), frame.second);
             graph_->set_tag(diagnostics::tag_severity::WARNING, "late-frame");
         } else
             last_frame_ = frame;
@@ -375,7 +389,8 @@ class decklink_producer_proxy : public core::frame_producer_base
                                      const core::audio_channel_layout&           channel_layout,
                                      int                                         device_index,
                                      const std::wstring&                         filter_str,
-                                     uint32_t                                    length)
+                                     uint32_t                                    length,
+                                     bool                                        freeze_on_lost)
         : executor_(L"decklink_producer[" + boost::lexical_cast<std::wstring>(device_index) + L"]")
         , length_(length)
     {
@@ -384,7 +399,7 @@ class decklink_producer_proxy : public core::frame_producer_base
             core::diagnostics::call_context::for_thread() = ctx;
             com_initialize();
             producer_.reset(new decklink_producer(
-                in_format_desc, device_index, frame_factory, out_format_desc, channel_layout, filter_str));
+                in_format_desc, device_index, frame_factory, out_format_desc, channel_layout, filter_str, freeze_on_lost));
         });
     }
 
@@ -441,7 +456,9 @@ void describe_producer(core::help_sink& sink, const core::help_repository& repo)
                L"format of the channel is assumed.")
         ->item(L"channel_layout",
                L"Specifies what audio channel layout to expect on the incoming SDI/HDMI signal. If not specified, "
-               L"stereo is assumed.");
+               L"stereo is assumed.")
+        ->item(L"freeze_on_lost",
+               L"Whether to freeze video on signal lost instead of going to black");
     sink.para()->text(L"Examples:");
     sink.example(
         L">> PLAY 1-10 DECKLINK DEVICE 2",
@@ -463,6 +480,8 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
     auto device_index = get_param(L"DEVICE", params, -1);
     if (device_index == -1)
         device_index = boost::lexical_cast<int>(params.at(1));
+
+    auto freeze_on_lost = contains_param(L"FREEZE_ON_LOST", params);
 
     auto filter_str     = get_param(L"FILTER", params);
     auto length         = get_param(L"LENGTH", params, std::numeric_limits<uint32_t>::max());
@@ -493,7 +512,8 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
                                                               channel_layout,
                                                               device_index,
                                                               filter_str,
-                                                              length);
+                                                              length,
+                                                              freeze_on_lost);
 
     auto get_source_framerate = [=] { return producer->get_out_framerate(); };
     auto target_framerate     = dependencies.format_desc.framerate;
