@@ -1,5 +1,22 @@
 C H A N G E S
 
+CasparCG 2.1.0 NRK RC1 (w.r.t 2.1.0 Next)
+==========================================
+
+  o Upgrade HTML Producer to Chromium 63
+
+  o Upgrade FFMpeg to match 2.2 (fmpeg-20180219-acdea9e)
+
+  o Timecode passthrough and AMCP command scheduler (https://docs.google.com/document/d/1xkksxIdNHMO95RFF8wJ3vYRbXCHwKnjkMwVqwAyjv3A/edit?usp=sharing)
+
+  o Remove all usages of framerate producer to decrease latency. This will require all source media to be in 25/50 to play properly
+
+  o Don't attempt to sync consumer outputs. This should be done manually if multiple must be in sync
+
+  o Add option to freeze decklink producer input on signal loss
+
+  o Fix LOADBG with AUTO when seeking in the ffmpeg producer
+
 CasparCG 2.1.0 Next (w.r.t 2.1.0 Beta 2)
 ==========================================
 
