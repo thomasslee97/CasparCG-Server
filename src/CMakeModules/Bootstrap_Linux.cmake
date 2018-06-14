@@ -72,7 +72,7 @@ ADD_DEFINITIONS (-DBOOST_NO_SWPRINTF) # swprintf on Linux seems to always use , 
 ADD_DEFINITIONS (-DTBB_USE_CAPTURED_EXCEPTION=1)
 ADD_DEFINITIONS (-DNDEBUG) # Needed for precompiled headers to work
 
-ADD_COMPILE_OPTIONS (-std=c++14) # Needed for precompiled headers to work
+set(CMAKE_CXX_STANDARD 14)
 ADD_COMPILE_OPTIONS (-O3) # Needed for precompiled headers to work
 ADD_COMPILE_OPTIONS (-Wno-deprecated-declarations -Wno-write-strings -Wno-terminate -Wno-multichar -Wno-cpp)
 ADD_COMPILE_OPTIONS (-msse3)

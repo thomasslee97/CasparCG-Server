@@ -51,4 +51,6 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
 	libx265-dev \
 	libxss1 \
 	libgtk2.0-0 \
-	libssl1.0.0
+	libssl1.0.0 \
+	qml \
+	qt-declerative5-dev
