@@ -8,6 +8,8 @@ join_list("${CASPARCG_MODULE_COMMAND_LINE_ARG_INTERCEPTORS_STATEMENTS}" "\n" CAS
 CONFIGURE_FILE ("${PROJECT_SOURCE_DIR}/included_modules.tmpl" "${CMAKE_BINARY_DIR}/generated/included_modules.h")
 CONFIGURE_FILE ("${PROJECT_SOURCE_DIR}/packages.config" "${CMAKE_CURRENT_BINARY_DIR}/packages.config")
 
+cmake_policy(SET CMP0020 NEW)
+
 if (MSVC)
 	set(OS_SPECIFIC_SOURCES
 			resource.h

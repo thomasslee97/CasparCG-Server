@@ -156,6 +156,8 @@ casparcg_add_runtime_dependency("${OPENAL_BIN_PATH}/OpenAL32.dll")
 set(LIBERATION_FONTS_BIN_PATH "${PROJECT_SOURCE_DIR}/shell/liberation-fonts")
 casparcg_add_runtime_dependency("${LIBERATION_FONTS_BIN_PATH}/LiberationMono-Regular.ttf")
 
+set(QT_ROOT "C:/Qt/5.10.1/msvc2017_64")
+
 # CEF
 set(CEF_INCLUDE_PATH "${NUGET_PACKAGES_FOLDER}/cef.sdk.3.3239.1723/CEF")
 set(CEF_BIN_PATH "${NUGET_PACKAGES_FOLDER}/cef.redist.x64.3.3239.1723/CEF")

@@ -56,6 +56,8 @@ SET (FFMPEG_INCLUDE_PATH "${FFMPEG_INCLUDE_DIRS}")
 SET (ASMLIB_INCLUDE_PATH "${EXTERNAL_INCLUDE_PATH}")
 SET (FREEIMAGE_INCLUDE_PATH "${FreeImage_INCLUDE_DIRS}")
 
+set(QT_ROOT "/opt/qt5")
+
 set(CEF_INCLUDE_PATH "/opt/cef/include")
 set(CEF_PATH "/opt/cef")
 set(CEF_BIN_PATH "/opt/cef/Release")

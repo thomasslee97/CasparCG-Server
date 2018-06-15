@@ -1,6 +1,8 @@
 cmake_minimum_required (VERSION 2.6)
 project (qtquick)
 
+cmake_policy(SET CMP0020 NEW)
+
 set(SOURCES
 		producer/qtquick_cg_proxy.cpp
 		producer/qtquick_producer.cpp
