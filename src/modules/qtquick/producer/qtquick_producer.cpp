@@ -214,9 +214,9 @@ class qt_renderer
         control_.invalidate();
     }
 
-    void startQuick(const QString& filename)
+    void startQuick(const QUrl& filename)
     {
-        qmlComponent_ = std::unique_ptr<QQmlComponent>(new QQmlComponent(&engine_, QUrl(filename)));
+        qmlComponent_ = std::unique_ptr<QQmlComponent>(new QQmlComponent(&engine_, filename));
 
         if (qmlComponent_->isLoading()) {
             auto conn = std::make_shared<QMetaObject::Connection>();
@@ -266,8 +266,8 @@ class qtquick_producer : public core::frame_producer_base
   public:
     qtquick_producer(const spl::shared_ptr<core::frame_factory>& frame_factory,
                      const core::video_format_desc&              format_desc,
-                     const std::wstring&                         url)
-        : url_(url)
+                     const QUrl&                         url)
+        : url_(url.toDisplayString().toStdWString())
     {
         loaded_ = false;
 
@@ -276,7 +276,7 @@ class qtquick_producer : public core::frame_producer_base
                                       auto loaded_callback = [this]() { renderer_loaded(); };
                                       renderer_ =
                                           std::make_unique<qt_renderer>(frame_factory, loaded_callback, format_desc);
-                                      renderer_->startQuick(QString::fromStdWString(url));
+                                      renderer_->startQuick(url);
                                   },
                                   Qt::QueuedConnection);
     }
@@ -333,17 +333,13 @@ spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer
 {
     const auto filename       = env::template_folder() + params.at(0) + L".qml";
     const auto found_filename = find_case_insensitive(filename);
-    const auto url_prefix     = boost::iequals(params.at(0), L"[URL]");
+    const auto url_prefix     = boost::iequals(params.at(0), L"[QML]");
 
     if (!found_filename && !url_prefix)
         return core::frame_producer::empty();
 
-    const auto url = found_filename ? L"file://" + *found_filename : params.at(1);
-
-    if (!url_prefix && (!boost::algorithm::contains(url, ".") || boost::algorithm::ends_with(url, "_A") ||
-                        boost::algorithm::ends_with(url, "_ALPHA")))
-        return core::frame_producer::empty();
-
+    const auto url = found_filename ? QUrl::fromLocalFile(QString::fromStdWString(*found_filename)) : QUrl::fromUserInput(QString::fromStdWString(params.at(1)));
+    
     return core::create_destroy_proxy(
         spl::make_shared<qtquick_producer>(dependencies.frame_factory, dependencies.format_desc, url));
 }
