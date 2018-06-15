@@ -52,5 +52,6 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
 	libxss1 \
 	libgtk2.0-0 \
 	libssl1.0.0 \
-	qml \
-	qt-declerative5-dev
+	libdbus-1-3 \
+	libx11-xcb-dev \
+	libglu1-mesa-dev

@@ -1,0 +1,7 @@
+linux - copy qt deps 
+cp /opt/qt5/qml/* bin/
+cp /opt/qt5/plugins/* bin/
+
+doesnt render anything, and there is an unexplained stack trace when caspar starts (cant figure out x11/wayland?)
+
+test on ubuntu18, instead of debian10

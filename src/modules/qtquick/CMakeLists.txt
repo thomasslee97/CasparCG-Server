@@ -20,7 +20,6 @@ include_directories(..)
 include_directories(../..)
 include_directories(${BOOST_INCLUDE_PATH})
 
-LIST(APPEND CMAKE_MODULE_PATH /usr/lib/x86_64-linux-gnu/cmake/Qt5Core/)
 find_package(Qt5Quick 5.10 REQUIRED)
 target_link_libraries(qtquick Qt5::Core Qt5::Quick)
 
