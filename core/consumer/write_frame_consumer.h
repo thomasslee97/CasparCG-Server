@@ -33,7 +33,13 @@
 #include <vector>
 
 namespace caspar { namespace core {
-	
+
+enum frame_consumer_mode {
+    foreground,
+    background,
+    next_producer, // background if any, then foreground
+};
+
 struct write_frame_consumer : boost::noncopyable
 {
 	virtual ~write_frame_consumer() {}

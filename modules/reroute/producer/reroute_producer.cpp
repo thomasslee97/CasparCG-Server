@@ -27,6 +27,7 @@
 
 #include <common/param.h>
 
+#include <core/consumer/write_frame_consumer.h>
 #include <core/producer/frame_producer.h>
 #include <core/video_channel.h>
 #include <core/help/help_sink.h>
@@ -104,7 +105,13 @@ spl::shared_ptr<core::frame_producer> create_producer(
 	{
 		auto layer = boost::lexical_cast<int>(channel_layer_spec.substr(dash + 1));
 
-		return create_layer_producer(*found_channel, layer, frames_delay, dependencies.format_desc);
+                auto mode = core::frame_consumer_mode::foreground;
+                if (contains_param(L"BACKGROUND", params))
+                    mode = core::frame_consumer_mode::background;
+                else if (contains_param(L"NEXT", params))
+                    mode = core::frame_consumer_mode::next_producer;
+
+		return create_layer_producer(*found_channel, layer, mode, frames_delay, dependencies.format_desc);
 	}
 	else
 	{

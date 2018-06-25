@@ -24,6 +24,7 @@
 #include "../fwd.h"
 #include "../interaction/interaction_sink.h"
 #include "../monitor/monitor.h"
+#include "../consumer/write_frame_consumer.h"
 
 #include <common/executor.h>
 #include <common/forward.h>
@@ -141,7 +142,7 @@ class stage : public stage_base
     std::future<void>
     swap_layer(int index, int other_index, const std::shared_ptr<stage_base>& other, bool swap_transforms) override;
 
-    void add_layer_consumer(void* token, int layer, const spl::shared_ptr<write_frame_consumer>& layer_consumer);
+    void add_layer_consumer(void* token, int layer, frame_consumer_mode mode, const spl::shared_ptr<write_frame_consumer>& layer_consumer);
     void remove_layer_consumer(void* token, int layer);
 
     monitor::subject& monitor_output();

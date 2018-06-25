@@ -56,8 +56,10 @@ struct stage::impl : public std::enable_shared_from_this<impl>
     std::map<int, layer>                layers_;
     std::map<int, tweened_transform>    tweens_;
     interaction_aggregator              aggregator_;
+    
     // map of layer -> map of tokens (src ref) -> layer_consumer
-    std::map<int, std::map<void*, spl::shared_ptr<write_frame_consumer>>> layer_consumers_;
+    typedef std::pair<frame_consumer_mode, spl::shared_ptr<write_frame_consumer>> layer_consumer_entry;
+    std::map<int, std::map<void*, layer_consumer_entry>> layer_consumers_;
     executor   executor_{L"stage " + boost::lexical_cast<std::wstring>(channel_index_)};
     std::mutex lock_;
 
@@ -103,6 +105,21 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                         indices.push_back(layer.first);
                     }
 
+                    // find any layers with consumers (routes) but no source
+                    for (auto& consumers : layer_consumers_) {
+                        if (consumers.second.empty())
+                            continue;
+                        
+                        if (std::find(indices.begin(), indices.end(), consumers.first) != indices.end())
+                            continue;
+
+                        frames[consumers.first] = draw_frame::empty();
+                        tweens_[consumers.first];
+                        layer_consumers_[consumers.first];
+
+                        indices.push_back(consumers.first);
+                    }
+
                     aggregator_.translate_and_send();
 
                     tbb::parallel_for_each(
@@ -134,9 +151,18 @@ struct stage::impl : public std::enable_shared_from_this<impl>
 
         if (!consumers.empty()) {
             auto consumer_it = consumers | boost::adaptors::map_values;
+            bool any_bg_consumers = std::find_if(consumer_it.begin(), consumer_it.end(), [](decltype(*consumer_it.begin()) c) { return c.first != core::frame_consumer_mode::foreground; }) != consumer_it.end();
+            auto frame_bg = any_bg_consumers ? layer.receive_background() : draw_frame::empty();
+            bool has_bg = any_bg_consumers ? layer.has_background() : false;
+
             tbb::parallel_for_each(consumer_it.begin(),
                                    consumer_it.end(),
-                                   [&](decltype(*consumer_it.begin()) layer_consumer) { layer_consumer->send(frame); });
+                                   [&](decltype(*consumer_it.begin()) c) { 
+                if (c.first == core::frame_consumer_mode::background || (c.first == core::frame_consumer_mode::next_producer && has_bg))
+                    c.second->send(frame_bg);
+                else
+                    c.second->send(frame);
+            });
         }
 
         auto frame1 = frame;
@@ -323,10 +349,12 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                                       task_priority::high_priority);
     }
 
-    void add_layer_consumer(void* token, int layer, const spl::shared_ptr<write_frame_consumer>& layer_consumer)
+    void add_layer_consumer(void* token, int layer, frame_consumer_mode mode, const spl::shared_ptr<write_frame_consumer>& layer_consumer)
     {
-        executor_.begin_invoke([=] { layer_consumers_[layer].insert(std::make_pair(token, layer_consumer)); },
-                               task_priority::high_priority);
+        executor_.begin_invoke([=] {
+            layer_consumers_[layer].insert(std::make_pair(token, std::make_pair(mode, layer_consumer)));
+        },
+            task_priority::high_priority);
     }
 
     void remove_layer_consumer(void* token, int layer)
@@ -473,9 +501,9 @@ stage::swap_layer(int index, int other_index, const std::shared_ptr<stage_base>&
     const auto other2 = std::static_pointer_cast<stage>(other);
     return impl_->swap_layer(index, other_index, other2, swap_transforms);
 }
-void stage::add_layer_consumer(void* token, int layer, const spl::shared_ptr<write_frame_consumer>& layer_consumer)
+void stage::add_layer_consumer(void* token, int layer, frame_consumer_mode mode, const spl::shared_ptr<write_frame_consumer>& layer_consumer)
 {
-    impl_->add_layer_consumer(token, layer, layer_consumer);
+    impl_->add_layer_consumer(token, layer, mode, layer_consumer);
 }
 void stage::remove_layer_consumer(void* token, int layer) { impl_->remove_layer_consumer(token, layer); }
 std::future<std::shared_ptr<frame_producer>> stage::foreground(int index) { return impl_->foreground(index); }

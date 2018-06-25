@@ -24,12 +24,14 @@
 #include <common/memory.h>
 
 #include <core/fwd.h>
+#include <core/consumer/write_frame_consumer.h>
 
 namespace caspar { namespace reroute {
 
 spl::shared_ptr<core::frame_producer> create_layer_producer(
 		const spl::shared_ptr<core::video_channel>& channel,
 		int layer,
+                core::frame_consumer_mode mode,
 		int frames_delay,
 		const core::video_format_desc& destination_mode);
 

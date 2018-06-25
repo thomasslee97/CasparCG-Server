@@ -124,6 +124,26 @@ public:
 		auto_play_delta_.reset();
 	}
 
+        draw_frame receive_background()
+        {
+            try
+            {
+                if (background_ == frame_producer::empty())
+                    return draw_frame::empty();
+
+                auto frame = background_->receive();
+                background_->paused(true);
+
+                return frame;
+            }
+            catch (...)
+            {
+                CASPAR_LOG_CURRENT_EXCEPTION();
+                background_ = std::move(frame_producer::empty());
+                return draw_frame::empty();
+            }
+        }
+
 	draw_frame receive(const video_format_desc& format_desc)
 	{
 		try
@@ -224,9 +244,11 @@ void layer::play(){impl_->play();}
 void layer::pause(){impl_->pause();}
 void layer::resume(){impl_->resume();}
 void layer::stop(){impl_->stop();}
-draw_frame layer::receive(const video_format_desc& format_desc) {return impl_->receive(format_desc);}
+draw_frame layer::receive(const video_format_desc& format_desc) { return impl_->receive(format_desc); }
+draw_frame layer::receive_background() { return impl_->receive_background(); }
 spl::shared_ptr<frame_producer> layer::foreground() const { return impl_->foreground_;}
 spl::shared_ptr<frame_producer> layer::background() const { return impl_->background_;}
+bool layer::has_background() const { return impl_->background_ != frame_producer::empty(); }
 boost::property_tree::wptree layer::info() const{return impl_->info();}
 boost::property_tree::wptree layer::delay_info() const{return impl_->delay_info();}
 monitor::subject& layer::monitor_output() {return *impl_->monitor_subject_;}

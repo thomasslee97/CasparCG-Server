@@ -153,7 +153,7 @@ class layer_producer : public core::frame_producer_base
 	std::queue<core::draw_frame>				frame_buffer_;
 
 public:
-	explicit layer_producer(const spl::shared_ptr<core::video_channel>& channel, int layer, int frames_delay)
+	explicit layer_producer(const spl::shared_ptr<core::video_channel>& channel, int layer, core::frame_consumer_mode mode, int frames_delay)
 		: layer_(layer)
 		, consumer_(spl::make_shared<layer_consumer>(frames_delay))
 		, channel_(channel)
@@ -161,7 +161,7 @@ public:
 	{
 		pixel_constraints_.width.set(channel->video_format_desc().width);
 		pixel_constraints_.height.set(channel->video_format_desc().height);
-		channel->stage()->add_layer_consumer(this, layer_, consumer_);
+		channel->stage()->add_layer_consumer(this, layer_, mode, consumer_);
 		consumer_->block_until_first_frame_available();
 		double_framerate_ = false;
 		CASPAR_LOG(info) << print() << L" Initialized";
@@ -256,10 +256,11 @@ public:
 spl::shared_ptr<core::frame_producer> create_layer_producer(
 		const spl::shared_ptr<core::video_channel>& channel,
 		int layer,
+                core::frame_consumer_mode mode,
 		int frames_delay,
 		const core::video_format_desc& destination_mode)
 {
-	auto producer = spl::make_shared<layer_producer>(channel, layer, frames_delay);
+	auto producer = spl::make_shared<layer_producer>(channel, layer, mode, frames_delay);
 
 	return producer;
 }
