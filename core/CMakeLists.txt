@@ -48,6 +48,7 @@ set(SOURCES
 		producer/text/utils/texture_font.cpp
 
 		producer/transition/transition_producer.cpp
+		producer/transition/sting_producer.cpp
 
 		producer/cg_proxy.cpp
 		producer/frame_producer.cpp
@@ -126,6 +127,7 @@ set(HEADERS
 		producer/text/text_producer.h
 
 		producer/transition/transition_producer.h
+		producer/transition/sting_producer.h
 
 		producer/binding.h
 		producer/cg_proxy.h
