@@ -99,6 +99,7 @@ struct image_transform final
 
 	core::field_mode		field_mode			= core::field_mode::progressive;
 	bool					is_key				= false;
+        bool                                    invert                      = false;
 	bool					is_mix				= false;
 	bool					use_mipmap			= false;
 	core::blend_mode		blend_mode			= core::blend_mode::normal;

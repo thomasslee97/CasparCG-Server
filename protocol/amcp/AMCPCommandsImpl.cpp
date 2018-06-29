@@ -57,8 +57,8 @@
 #include <core/producer/media_info/media_info_repository.h>
 #include <core/producer/stage.h>
 #include <core/producer/text/text_producer.h>
-#include <core/producer/transition/transition_producer.h>
 #include <core/producer/transition/sting_producer.h>
+#include <core/producer/transition/transition_producer.h>
 #include <core/system_info_provider.h>
 #include <core/thumbnail_generator.h>
 #include <core/video_format.h>
@@ -371,11 +371,11 @@ bool try_match_transition(const std::wstring& message, transition_info& transiti
         return false;
     }
 
-    auto transition = what["TRANSITION"].str();
+    auto transition         = what["TRANSITION"].str();
     transitionInfo.duration = boost::lexical_cast<size_t>(what["DURATION"].str());
-    auto direction = what["DIRECTION"].matched ? what["DIRECTION"].str() : L"";
-    auto tween = what["TWEEN"].matched ? what["TWEEN"].str() : L"";
-    transitionInfo.tweener = tween;
+    auto direction          = what["DIRECTION"].matched ? what["DIRECTION"].str() : L"";
+    auto tween              = what["TWEEN"].matched ? what["TWEEN"].str() : L"";
+    transitionInfo.tweener  = tween;
 
     if (transition == L"CUT")
         transitionInfo.type = transition_type::cut;
@@ -400,30 +400,26 @@ bool try_match_transition(const std::wstring& message, transition_info& transiti
     return true;
 }
 
-
 bool try_match_sting(const std::vector<std::wstring>& params, sting_info& stingInfo)
-{    
+{
     auto match = std::find_if(params.begin(), params.end(), param_comparer(L"STING"));
     if (match == params.end())
         return false;
 
     auto start_ind = static_cast<int>(match - params.begin());
 
-    if (params.size() <= start_ind + 1)
-    {
+    if (params.size() <= start_ind + 1) {
         // No mask filename
         return false;
     }
 
     stingInfo.mask_filename = params.at(start_ind + 1);
 
-    if (params.size() > start_ind + 2)
-    {
+    if (params.size() > start_ind + 2) {
         stingInfo.trigger_point = boost::lexical_cast<int>(params.at(start_ind + 2));
     }
 
-    if (params.size() > start_ind + 3)
-    {
+    if (params.size() > start_ind + 3) {
         stingInfo.overlay_filename = params.at(start_ind + 3);
     }
 
@@ -431,7 +427,7 @@ bool try_match_sting(const std::vector<std::wstring>& params, sting_info& stingI
 }
 
 std::wstring loadbg_command(command_context& ctx)
-{    
+{
     // Perform loading of the clip
     core::diagnostics::scoped_call_context save;
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
@@ -447,16 +443,15 @@ std::wstring loadbg_command(command_context& ctx)
     bool auto_play = contains_param(L"AUTO", ctx.parameters);
 
     spl::shared_ptr<frame_producer> transition_producer = frame_producer::empty();
-    transition_info transitionInfo;
-    sting_info stingInfo;
-    int duration;
+    transition_info                 transitionInfo;
+    sting_info                      stingInfo;
+    int                             duration;
 
     if (try_match_sting(ctx.parameters, stingInfo)) {
-        transition_producer = create_sting_producer(get_producer_dependencies(channel, ctx), channel->video_format_desc().field_mode, pFP, stingInfo);
+        transition_producer = create_sting_producer(
+            get_producer_dependencies(channel, ctx), channel->video_format_desc().field_mode, pFP, stingInfo);
         duration = stingInfo.duration;
-    }
-    else
-    {
+    } else {
         std::wstring message;
         for (size_t n = 0; n < ctx.parameters.size(); ++n)
             message += boost::to_upper_copy(ctx.parameters[n]) + L" ";
@@ -464,7 +459,7 @@ std::wstring loadbg_command(command_context& ctx)
         // Always fallback to transition
         try_match_transition(message, transitionInfo);
         transition_producer = create_transition_producer(channel->video_format_desc().field_mode, pFP, transitionInfo);
-        duration = transitionInfo.duration;
+        duration            = transitionInfo.duration;
     }
 
     if (auto_play)
@@ -1363,6 +1358,39 @@ std::future<std::wstring> mixer_keyer_command(command_context& ctx)
     transforms.add(stage::transform_tuple_t(ctx.layer_index(),
                                             [=](frame_transform transform) -> frame_transform {
                                                 transform.image_transform.is_key = value;
+                                                return transform;
+                                            },
+                                            0,
+                                            tweener(L"linear")));
+    transforms.apply();
+
+    return make_ready_future<std::wstring>(L"202 MIXER OK\r\n");
+}
+
+void mixer_invert_describer(core::help_sink& sink, const core::help_repository& repo)
+{
+    sink.short_description(L"Invert colours for a layer.");
+    sink.syntax(L"MIXER [video_channel:int]{-[layer:int]|-0} INVERT {invert:0,1|0}");
+    sink.para()
+        ->text(L"Inverts the colour of the layer. Especially useful if using the layer as a mask for another.");
+    sink.para()->text(L"Examples:");
+    sink.example(L">> MIXER 1-0 INVERT 1");
+    sink.example(L">> MIXER 1-0 INVERT\n"
+                 L"<< 201 MIXER OK\n"
+                 L"<< 1",
+                 L"to retrieve the current state");
+}
+
+std::future<std::wstring> mixer_invert_command(command_context& ctx)
+{
+    if (ctx.parameters.empty())
+        return reply_value(ctx, [](const frame_transform& t) { return t.image_transform.invert ? 1 : 0; });
+
+    transforms_applier transforms(ctx);
+    bool               value = boost::lexical_cast<int>(ctx.parameters.at(0));
+    transforms.add(stage::transform_tuple_t(ctx.layer_index(),
+                                            [=](frame_transform transform) -> frame_transform {
+                                                transform.image_transform.invert = value;
                                                 return transform;
                                             },
                                             0,
@@ -2855,7 +2883,6 @@ std::future<std::wstring> info_delay_command(command_context& ctx)
 
         return create_info_xml_reply(info, L"DELAY");
     });
-
 }
 
 void diag_describer(core::help_sink& sink, const core::help_repository& repo)
@@ -3252,6 +3279,7 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_channel_command(L"Template Commands", L"CG INFO", cg_info_describer, cg_info_command, 0);
 
     repo->register_channel_command(L"Mixer Commands", L"MIXER KEYER", mixer_keyer_describer, mixer_keyer_command, 0);
+    repo->register_channel_command(L"Mixer Commands", L"MIXER INVERT", mixer_invert_describer, mixer_invert_command, 0);
     repo->register_channel_command(L"Mixer Commands", L"MIXER CHROMA", mixer_chroma_describer, mixer_chroma_command, 0);
     repo->register_channel_command(L"Mixer Commands", L"MIXER BLEND", mixer_blend_describer, mixer_blend_command, 0);
     repo->register_channel_command(

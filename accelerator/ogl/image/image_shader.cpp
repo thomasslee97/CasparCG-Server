@@ -187,6 +187,7 @@ std::string get_fragment(bool blend_modes, bool post_processing)
 			uniform int			pixel_format;
 			uniform int			deinterlace;
 
+                        uniform bool            invert;
 			uniform float		opacity;
 			uniform bool		levels;
 			uniform float		min_input;
@@ -343,6 +344,10 @@ std::string get_fragment(bool blend_modes, bool post_processing)
 					if(has_layer_key)
 						color *= texture2D(layer_key, gl_TexCoord[1].st).r;
 					color *= opacity;
+
+                                        if (invert)
+                                            color = 1.0 - color;
+
 					color = blend(color);
 					gl_FragColor = color.bgra;
 				}

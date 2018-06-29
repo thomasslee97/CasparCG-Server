@@ -196,8 +196,14 @@ namespace caspar {
                 src_frame.transform().audio_transform.volume = 1.0 - delta2;
                 dest_frame.transform().audio_transform.volume = delta2;
 
-                std::vector<draw_frame> frames;
+                draw_frame mask_frame2 = mask_frame;
+                
                 mask_frame.transform().image_transform.is_key = true;
+                mask_frame2.transform().image_transform.is_key = true;
+                mask_frame2.transform().image_transform.invert = true;
+
+                std::vector<draw_frame> frames;
+                frames.push_back(std::move(mask_frame2));
                 frames.push_back(std::move(src_frame));
                 frames.push_back(std::move(mask_frame));
                 frames.push_back(std::move(dest_frame));
