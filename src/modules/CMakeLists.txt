@@ -6,10 +6,10 @@ add_subdirectory(oal)
 add_subdirectory(decklink)
 add_subdirectory(screen)
 add_subdirectory(html)
+add_subdirectory(newtek)
 
 if (MSVC)
 	add_subdirectory(flash)
-	add_subdirectory(newtek)
 	add_subdirectory(bluefish)
 endif()
 

@@ -16,14 +16,14 @@
  * You should have received a copy of the GNU General Public License
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Robert Nagy, ronag89@gmail.com
+ * Author: Julian Waller, git@julusian.co.uk
  */
+#pragma once
 
-// stdafx.cpp : source file that includes just the standard includes
-//	dma.pch will be the pre-compiled header
-//	stdafx.obj will contain the pre-compiled type information
+#include "Processing.NDI.Lib.h"
 
-#include "StdAfx.h"
+namespace caspar { namespace newtek { namespace ndi {
 
-// TODO: reference any additional headers you need in STDAFX.H
-// and not in this file
+const std::shared_ptr<const NDIlib_v3> get_instance();
+
+}}} // namespace caspar::newtek::ndi

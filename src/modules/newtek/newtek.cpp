@@ -21,8 +21,8 @@
 
 #include "newtek.h"
 
-#include "consumer/newtek_ivga_consumer.h"
-#include "util/air_send.h"
+#include "newtek/consumer/newtek_ndi_consumer.h"
+#include "newtek/util/ndi_instance.h"
 
 #include <core/consumer/frame_consumer.h>
 
@@ -31,9 +31,9 @@ namespace caspar { namespace newtek {
 void init(core::module_dependencies dependencies)
 {
     try {
-        dependencies.consumer_registry->register_consumer_factory(L"iVGA Consumer", create_ivga_consumer);
-        dependencies.consumer_registry->register_preconfigured_consumer_factory(L"newtek-ivga",
-                                                                                create_preconfigured_ivga_consumer);
+        dependencies.consumer_registry->register_consumer_factory(L"NDI Consumer", create_ndi_consumer);
+        dependencies.consumer_registry->register_preconfigured_consumer_factory(L"newtek-ndi",
+                                                                                create_preconfigured_ndi_consumer);
     } catch (...) {
     }
 }

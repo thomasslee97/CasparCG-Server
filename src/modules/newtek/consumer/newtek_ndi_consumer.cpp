@@ -16,12 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Robert Nagy, ronag@live.com
+ * Author: Julian Waller, git@julusian.co.uk
  */
 
 #include "../StdAfx.h"
 
-#include "newtek_ivga_consumer.h"
+#include "newtek_ndi_consumer.h"
 
 #include <core/consumer/frame_consumer.h>
 #include <core/frame/frame.h>
@@ -40,24 +40,27 @@
 
 #include <atomic>
 
-#include "../util/air_send.h"
+#include "newtek/util/ndi_instance.h"
 
 namespace caspar { namespace newtek {
 
-struct newtek_ivga_consumer : public core::frame_consumer
+struct newtek_ndi_consumer : public core::frame_consumer
 {
     core::video_format_desc             format_desc_;
     core::monitor::state                state_;
-    std::shared_ptr<void>               air_send_;
-    std::atomic<bool>                   connected_ = false;
+    std::atomic<bool>                   connected_ = {false};
     spl::shared_ptr<diagnostics::graph> graph_;
     timer                               tick_timer_;
 
+    std::shared_ptr<const NDIlib_v3> ndi_instance_;
+    NDIlib_send_instance_t send_instance_;
+
   public:
-    newtek_ivga_consumer()
+    newtek_ndi_consumer()
     {
-        if (!airsend::is_available()) {
-            CASPAR_THROW_EXCEPTION(not_supported() << msg_info(airsend::dll_name() + L" not available"));
+        ndi_instance_ = ndi::get_instance();
+        if (!ndi_instance_) {
+            CASPAR_THROW_EXCEPTION(not_supported() << msg_info(L"Newtek NDI not available"));
         }
 
         graph_->set_text(print());
@@ -67,7 +70,11 @@ struct newtek_ivga_consumer : public core::frame_consumer
         diagnostics::register_graph(graph_);
     }
 
-    ~newtek_ivga_consumer() {}
+    ~newtek_ndi_consumer() {
+        if (send_instance_) {
+            ndi::get_instance()->NDIlib_send_destroy(send_instance_);
+        }
+    }
 
     // frame_consumer
 
@@ -75,18 +82,14 @@ struct newtek_ivga_consumer : public core::frame_consumer
     {
         format_desc_ = format_desc;
 
-        air_send_.reset(airsend::create(format_desc.width,
-                                        format_desc.height,
-                                        format_desc.time_scale,
-                                        format_desc.duration,
-                                        true,
-                                        static_cast<float>(format_desc.square_width) / static_cast<float>(format_desc.square_height),
-                                        true,
-                                        format_desc.audio_channels,
-                                        format_desc.audio_sample_rate),
-                        airsend::destroy);
+        std::string name = "CasparCG " + boost::lexical_cast<std::string>(channel_index);
+        // Create an NDI source that is clocked to the video.
+        NDIlib_send_create_t NDI_send_create_desc;
+        NDI_send_create_desc.p_ndi_name = name.c_str();
+        NDI_send_create_desc.clock_video = true;
 
-        CASPAR_VERIFY(air_send_);
+        send_instance_ = ndi::get_instance()->NDIlib_send_create(&NDI_send_create_desc);
+        CASPAR_VERIFY(send_instance_);
     }
 
     std::future<bool> send(core::const_frame frame) override
@@ -99,15 +102,34 @@ struct newtek_ivga_consumer : public core::frame_consumer
         caspar::timer frame_timer;
 
         {
-            auto audio_buffer = core::audio_32_to_16(frame.audio_data());
-            airsend::add_audio(air_send_.get(),
-                               audio_buffer.data(),
-                               static_cast<int>(audio_buffer.size()) / format_desc_.audio_channels);
+            auto audio_buffer = core::audio_32_to_float(frame.audio_data());
+
+            NDIlib_audio_frame_v2_t audio_frame;
+            audio_frame.sample_rate = format_desc_.audio_sample_rate;
+            audio_frame.no_channels = format_desc_.audio_channels;
+            audio_frame.no_samples = format_desc_.audio_cadence[0]; // TODO - rotate
+            audio_frame.p_data = &audio_buffer[0];
+            audio_frame.channel_stride_in_bytes = audio_frame.no_samples / audio_frame.no_channels;
+
+            // TODO - is there a better send that allows us to avoid the conversions?
+            ndi_instance_->NDIlib_send_send_audio_v2(send_instance_, &audio_frame);
         }
 
         {
-            connected_ = airsend::add_frame_bgra(air_send_.get(), frame.image_data(0).begin());
+            NDIlib_video_frame_v2_t ndi_frame;
+            ndi_frame.FourCC = NDIlib_FourCC_type_BGRA;
+            ndi_frame.xres = format_desc_.width;
+            ndi_frame.yres = format_desc_.height;
+            ndi_frame.line_stride_in_bytes = format_desc_.width * 4;
+            ndi_frame.frame_rate_N = format_desc_.time_scale;
+            ndi_frame.frame_rate_D = format_desc_.duration;
+            ndi_frame.frame_format_type = NDIlib_frame_format_type_progressive; // TODO convert to interlaced
+            ndi_frame.p_data = (uint8_t*)frame.image_data(0).data();
+
+            ndi_instance_->NDIlib_send_send_video_v2(send_instance_, &ndi_frame);
         }
+
+        connected_ = ndi_instance_->NDIlib_send_get_no_connections(send_instance_, 0);
 
         graph_->set_text(print());
         graph_->set_value("frame-time", frame_timer.elapsed() * format_desc_.fps * 0.5);
@@ -119,30 +141,30 @@ struct newtek_ivga_consumer : public core::frame_consumer
 
     std::wstring print() const override
     {
-        return connected_ ? L"newtek-ivga[connected]" : L"newtek-ivga[not connected]";
+        return connected_ ? L"newtek-ndi[connected]" : L"newtek-ndi[not connected]";
     }
 
-    std::wstring name() const override { return L"newtek-ivga"; }
+    std::wstring name() const override { return L"newtek-ndi"; }
 
     int index() const override { return 900; }
 
     bool has_synchronization_clock() const override { return false; }
 };
 
-spl::shared_ptr<core::frame_consumer> create_ivga_consumer(const std::vector<std::wstring>&                  params,
+spl::shared_ptr<core::frame_consumer> create_ndi_consumer(const std::vector<std::wstring>&                  params,
                                                            std::vector<spl::shared_ptr<core::video_channel>> channels)
 {
-    if (params.size() < 1 || !boost::iequals(params.at(0), L"NEWTEK_IVGA"))
+    if (params.size() < 1 || !boost::iequals(params.at(0), L"NEWTEK_NDI"))
         return core::frame_consumer::empty();
 
-    return spl::make_shared<newtek_ivga_consumer>();
+    return spl::make_shared<newtek_ndi_consumer>();
 }
 
 spl::shared_ptr<core::frame_consumer>
-create_preconfigured_ivga_consumer(const boost::property_tree::wptree&               ptree,
+create_preconfigured_ndi_consumer(const boost::property_tree::wptree&               ptree,
                                    std::vector<spl::shared_ptr<core::video_channel>> channels)
 {
-    return spl::make_shared<newtek_ivga_consumer>();
+    return spl::make_shared<newtek_ndi_consumer>();
 }
 
 }} // namespace caspar::newtek

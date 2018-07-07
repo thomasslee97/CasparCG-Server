@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Robert Nagy, ronag89@gmail.com
+ * Author: Julian Waller, git@julusian.co.uk
  */
 
 #pragma once
@@ -31,10 +31,10 @@
 
 namespace caspar { namespace newtek {
 
-spl::shared_ptr<core::frame_consumer> create_ivga_consumer(const std::vector<std::wstring>&                  params,
+spl::shared_ptr<core::frame_consumer> create_ndi_consumer(const std::vector<std::wstring>&                  params,
                                                            std::vector<spl::shared_ptr<core::video_channel>> channels);
 spl::shared_ptr<core::frame_consumer>
-create_preconfigured_ivga_consumer(const boost::property_tree::wptree&               ptree,
+create_preconfigured_ndi_consumer(const boost::property_tree::wptree&               ptree,
                                    std::vector<spl::shared_ptr<core::video_channel>> channels);
 
 }} // namespace caspar::newtek

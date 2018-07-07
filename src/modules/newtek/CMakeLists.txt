@@ -2,18 +2,18 @@ cmake_minimum_required (VERSION 2.6)
 project (newtek)
 
 set(SOURCES
-		consumer/newtek_ivga_consumer.cpp
+		consumer/newtek_ndi_consumer.cpp
 
-		util/air_send.cpp
+		util/ndi_instance.cpp
 
 		newtek.cpp
 
 		StdAfx.cpp
 )
 set(HEADERS
-		consumer/newtek_ivga_consumer.h
+		consumer/newtek_ndi_consumer.h
 
-		util/air_send.h
+		util/ndi_instance.h
 
 		newtek.h
 
@@ -28,6 +28,7 @@ include_directories(..)
 include_directories(../..)
 include_directories(${BOOST_INCLUDE_PATH})
 include_directories(${TBB_INCLUDE_PATH})
+include_directories(../../packages/ndi/include)
 
 set_target_properties(newtek PROPERTIES FOLDER modules)
 source_group(sources\\consumer consumer/*)

@@ -58,4 +58,18 @@ std::vector<int16_t> audio_32_to_16(const T& audio_data)
     return output16;
 }
 
+template <typename T>
+std::vector<float> audio_32_to_float(const T& audio_data)
+{
+    auto size     = std::distance(std::begin(audio_data), std::end(audio_data));
+    auto input32  = &(*std::begin(audio_data));
+    auto output = std::vector<float>();
+
+    output.reserve(size);
+    for (int n = 0; n < size; ++n)
+        output.push_back(input32[n] / INT32_MAX); // TODO - check accuracy
+
+    return output;
+}
+
 }} // namespace caspar::core
