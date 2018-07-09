@@ -40,7 +40,7 @@
 
 #include <atomic>
 
-#include "newtek/util/ndi_instance.h"
+#include "../util/ndi_instance.h"
 
 namespace caspar { namespace newtek {
 
@@ -130,6 +130,8 @@ struct newtek_ndi_consumer : public core::frame_consumer
         }
 
         connected_ = ndi_instance_->NDIlib_send_get_no_connections(send_instance_, 0);
+
+        // TODO - some osc data
 
         graph_->set_text(print());
         graph_->set_value("frame-time", frame_timer.elapsed() * format_desc_.fps * 0.5);
