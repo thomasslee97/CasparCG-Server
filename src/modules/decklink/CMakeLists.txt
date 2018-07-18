@@ -24,7 +24,7 @@ if (MSVC)
 	set(OS_SPECIFIC_SOURCES
 			StdAfx.c
 			interop/DeckLinkAPI_i.c
-			interop/DeckLinkAPI.h
+			interop/DeckLinkAPI_h.h
 			interop/DeckLinkAPIVersion.h
 	)
 else()
@@ -33,20 +33,10 @@ else()
 			linux_interop/DeckLinkAPIDeckControl.h
 			linux_interop/DeckLinkAPIDispatch.cpp
 			linux_interop/DeckLinkAPIModes.h
-			linux_interop/DeckLinkAPI_v10_2.h
-			linux_interop/DeckLinkAPI_v7_3.h
-			linux_interop/DeckLinkAPI_v7_9.h
-			linux_interop/DeckLinkAPI_v8_1.h
-			linux_interop/DeckLinkAPI_v9_9.h
 			linux_interop/LinuxCOM.h
-			linux_interop/DeckLinkAPIConfiguration_v10_2.h
 			linux_interop/DeckLinkAPIDiscovery.h
 			linux_interop/DeckLinkAPI.h
 			linux_interop/DeckLinkAPITypes.h
-			linux_interop/DeckLinkAPI_v7_1.h
-			linux_interop/DeckLinkAPI_v7_6.h
-			linux_interop/DeckLinkAPI_v8_0.h
-			linux_interop/DeckLinkAPI_v9_2.h
 			linux_interop/DeckLinkAPIVersion.h
 	)
 endif ()

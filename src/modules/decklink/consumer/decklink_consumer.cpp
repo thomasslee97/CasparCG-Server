@@ -257,7 +257,7 @@ struct decklink_consumer : public IDeckLinkVideoOutputCallback
 
     com_ptr<IDeckLink>                    decklink_      = get_device(config_.device_index);
     com_iface_ptr<IDeckLinkOutput>        output_        = iface_cast<IDeckLinkOutput>(decklink_);
-    com_iface_ptr<IDeckLinkConfiguration> configuration_ = iface_cast<IDeckLinkConfiguration>(decklink_);
+    com_iface_ptr<IDeckLinkConfiguration_v10_4> configuration_ = iface_cast<IDeckLinkConfiguration_v10_4>(decklink_);
     com_iface_ptr<IDeckLinkKeyer>         keyer_         = iface_cast<IDeckLinkKeyer>(decklink_, true);
     com_iface_ptr<IDeckLinkAttributes>    attributes_    = iface_cast<IDeckLinkAttributes>(decklink_);
 

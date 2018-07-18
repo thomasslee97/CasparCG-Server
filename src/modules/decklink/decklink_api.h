@@ -25,7 +25,7 @@
 
 #if defined(_MSC_VER)
 
-#include "interop/DeckLinkAPI.h"
+#include "interop/DeckLinkAPI_h.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4996)
@@ -72,7 +72,7 @@ static P<T> wrap_raw(T* ptr, bool already_referenced = false)
 static com_ptr<IDeckLinkIterator> create_iterator()
 {
     CComPtr<IDeckLinkIterator> pDecklinkIterator;
-    if (FAILED(pDecklinkIterator.CoCreateInstance(CLSID_CDeckLinkIterator)))
+    if (FAILED(pDecklinkIterator.CoCreateInstance(CLSID_CDeckLinkIterator_v10_8)))
         CASPAR_THROW_EXCEPTION(not_supported() << msg_info("Decklink drivers not found."));
     return pDecklinkIterator;
 }
@@ -100,8 +100,8 @@ T* get_raw(const CComPtr<T>& ptr)
 
 #else
 
-#include "linux_interop/DeckLinkAPI.h"
-#include "linux_interop/DeckLinkAPIConfiguration_v10_2.h"
+#include "linux_interop/DeckLinkAPI_v10_4.h"
+#include "linux_interop/DeckLinkAPIConfiguration_v10_4.h"
 #include <memory>
 #include <typeinfo>
 
@@ -180,9 +180,9 @@ REFIID iface_id<IDeckLinkConfiguration>()
     return IID_IDeckLinkConfiguration;
 }
 template <>
-REFIID iface_id<IDeckLinkConfiguration_v10_2>()
+REFIID iface_id<IDeckLinkConfiguration_v10_4>()
 {
-    return IID_IDeckLinkConfiguration_v10_2;
+    return IID_IDeckLinkConfiguration_v10_4;
 }
 template <>
 REFIID iface_id<IDeckLinkKeyer>()

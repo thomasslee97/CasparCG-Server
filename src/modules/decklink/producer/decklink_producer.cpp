@@ -111,9 +111,9 @@ struct Filter
                 } else if (dm->GetFlags() & bmdDisplayModeColorspaceRec709) {
                     colorspace = "bt709";
                 }
-                // TODO (fix) bmd doesn't have 2020 in flags?
-                //else if (dm->GetFlags() & bmdDisplayModeColorspaceRec2020) {
-                //}
+                else if (dm->GetFlags() & bmdDisplayModeColorspaceRec2020) {
+                    colorspace = "bt2020";
+                }
                 if (!colorspace.empty()) {
                     filter_spec = (boost::format("colorspace=iall=%s:all=%s,") % colorspace % colorspace).str() + filter_spec;
                 }
