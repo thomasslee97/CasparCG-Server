@@ -26,6 +26,7 @@
 #include <vector>
 
 #include <common/enum_class.h>
+#include <common/memory.h>
 
 #include <boost/rational.hpp>
 
@@ -67,6 +68,7 @@ enum class video_format
     x2160p5994,
     x2160p6000,
     invalid,
+    custom,
     count
 };
 
@@ -101,8 +103,7 @@ struct video_format_desc final
                       const std::wstring&     name,
                       const std::vector<int>& audio_cadence);
 
-    video_format_desc(video_format format = video_format::invalid);
-    video_format_desc(const std::wstring& name);
+    video_format_desc();
 };
 
 bool operator==(const video_format_desc& rhs, const video_format_desc& lhs);
@@ -110,6 +111,20 @@ bool operator!=(const video_format_desc& rhs, const video_format_desc& lhs);
 
 std::wostream& operator<<(std::wostream& out, const video_format_desc& format_desc);
 
-std::vector<int> find_audio_cadence(const boost::rational<int>& framerate, bool log_quiet = false);
+class video_format_registry
+{
+  public:
+    explicit video_format_registry();
+
+    video_format_desc find(const std::wstring& name) const;
+    video_format_desc find_format(const video_format& format) const;
+    void              store(const video_format_desc& format);
+
+    static video_format_desc invalid();
+
+  private:
+    struct impl;
+    spl::shared_ptr<impl> impl_;
+};
 
 }} // namespace caspar::core

@@ -99,12 +99,14 @@ struct frame_producer_dependencies
 {
     spl::shared_ptr<core::frame_factory>           frame_factory;
     std::vector<spl::shared_ptr<video_channel>>    channels;
+    spl::shared_ptr<core::video_format_registry>   format_registry;
     video_format_desc                              format_desc;
     spl::shared_ptr<const frame_producer_registry> producer_registry;
     spl::shared_ptr<const cg_producer_registry>    cg_registry;
 
     frame_producer_dependencies(const spl::shared_ptr<core::frame_factory>&          frame_factory,
                                 const std::vector<spl::shared_ptr<video_channel>>&   channels,
+                                const spl::shared_ptr<core::video_format_registry>&  format_registry,
                                 const video_format_desc&                             format_desc,
                                 const spl::shared_ptr<const frame_producer_registry> producer_registry,
                                 const spl::shared_ptr<const cg_producer_registry>    cg_registry);

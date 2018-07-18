@@ -36,6 +36,7 @@ struct command_context
     channel_context                                      channel;
     int                                                  channel_index;
     int                                                  layer_id;
+    spl::shared_ptr<core::video_format_registry>         format_registry;
     std::vector<channel_context>                         channels;
     spl::shared_ptr<core::cg_producer_registry>          cg_registry;
     spl::shared_ptr<const core::frame_producer_registry> producer_registry;
@@ -51,6 +52,7 @@ struct command_context
                     channel_context                                      channel,
                     int                                                  channel_index,
                     int                                                  layer_id,
+                    const spl::shared_ptr<core::video_format_registry>&  format_registry,
                     std::vector<channel_context>                         channels,
                     spl::shared_ptr<core::cg_producer_registry>          cg_registry,
                     spl::shared_ptr<const core::frame_producer_registry> producer_registry,
@@ -62,6 +64,7 @@ struct command_context
         , channel(channel)
         , channel_index(channel_index)
         , layer_id(layer_id)
+        , format_registry(format_registry)
         , channels(std::move(channels))
         , cg_registry(std::move(cg_registry))
         , producer_registry(std::move(producer_registry))

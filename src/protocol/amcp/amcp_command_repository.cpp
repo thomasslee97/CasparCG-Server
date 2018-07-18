@@ -65,6 +65,7 @@ AMCPCommand::ptr_type find_command(const std::map<std::wstring, std::pair<amcp_c
 
 struct amcp_command_repository::impl
 {
+    spl::shared_ptr<core::video_format_registry>         format_registry;
     std::vector<channel_context>                         channels;
     spl::shared_ptr<core::cg_producer_registry>          cg_registry;
     spl::shared_ptr<const core::frame_producer_registry> producer_registry;
@@ -76,12 +77,14 @@ struct amcp_command_repository::impl
     std::map<std::wstring, std::pair<amcp_command_func, int>> commands;
     std::map<std::wstring, std::pair<amcp_command_func, int>> channel_commands;
 
-    impl(const std::vector<spl::shared_ptr<core::video_channel>>&    channels,
+    impl(const spl::shared_ptr<core::video_format_registry>&         format_registry,
+         const std::vector<spl::shared_ptr<core::video_channel>>&    channels,
          const spl::shared_ptr<core::cg_producer_registry>&          cg_registry,
          const spl::shared_ptr<const core::frame_producer_registry>& producer_registry,
          const spl::shared_ptr<const core::frame_consumer_registry>& consumer_registry,
          std::function<void(bool)>                                   shutdown_server_now)
-        : cg_registry(cg_registry)
+        : format_registry(format_registry)
+        , cg_registry(cg_registry)
         , producer_registry(producer_registry)
         , consumer_registry(consumer_registry)
         , shutdown_server_now(shutdown_server_now)
@@ -96,12 +99,13 @@ struct amcp_command_repository::impl
 };
 
 amcp_command_repository::amcp_command_repository(
+    const spl::shared_ptr<core::video_format_registry>&         format_registry,
     const std::vector<spl::shared_ptr<core::video_channel>>&    channels,
     const spl::shared_ptr<core::cg_producer_registry>&          cg_registry,
     const spl::shared_ptr<const core::frame_producer_registry>& producer_registry,
     const spl::shared_ptr<const core::frame_consumer_registry>& consumer_registry,
     std::function<void(bool)>                                   shutdown_server_now)
-    : impl_(new impl(channels, cg_registry, producer_registry, consumer_registry, shutdown_server_now))
+    : impl_(new impl(format_registry, channels, cg_registry, producer_registry, consumer_registry, shutdown_server_now))
 {
 }
 
@@ -115,6 +119,7 @@ AMCPCommand::ptr_type amcp_command_repository::create_command(const std::wstring
                         channel_context(),
                         -1,
                         -1,
+                        self.format_registry,
                         self.channels,
                         self.cg_registry,
                         self.producer_registry,
@@ -147,6 +152,7 @@ AMCPCommand::ptr_type amcp_command_repository::create_channel_command(const std:
                         channel,
                         channel_index,
                         layer_index,
+                        self.format_registry,
                         self.channels,
                         self.cg_registry,
                         self.producer_registry,

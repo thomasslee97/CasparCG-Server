@@ -41,17 +41,20 @@ namespace caspar { namespace protocol { namespace CLK {
 class command_context
 {
     bool                                                 clock_loaded_ = false;
+    spl::shared_ptr<core::video_format_registry>         format_registry_;
     std::vector<spl::shared_ptr<core::video_channel>>    channels_;
     spl::shared_ptr<core::video_channel>                 channel_;
     spl::shared_ptr<core::cg_producer_registry>          cg_registry_;
     spl::shared_ptr<const core::frame_producer_registry> producer_registry_;
 
   public:
-    command_context(const std::vector<spl::shared_ptr<core::video_channel>>&    channels,
+    command_context(const spl::shared_ptr<core::video_format_registry>&         format_registry,
+                    const std::vector<spl::shared_ptr<core::video_channel>>&    channels,
                     const spl::shared_ptr<core::video_channel>&                 channel,
                     const spl::shared_ptr<core::cg_producer_registry>&          cg_registry,
                     const spl::shared_ptr<const core::frame_producer_registry>& producer_registry)
-        : channels_(channels)
+        : format_registry_(format_registry)
+        , channels_(channels)
         , channel_(channel)
         , cg_registry_(cg_registry)
         , producer_registry_(producer_registry)
@@ -61,8 +64,12 @@ class command_context
     void send_to_flash(const std::wstring& data)
     {
         if (!clock_loaded_) {
-            core::frame_producer_dependencies dependencies(
-                channel_->frame_factory(), channels_, channel_->video_format_desc(), producer_registry_, cg_registry_);
+            core::frame_producer_dependencies dependencies(channel_->frame_factory(),
+                                                           channels_,
+                                                           format_registry_,
+                                                           channel_->video_format_desc(),
+                                                           producer_registry_,
+                                                           cg_registry_);
             cg_registry_
                 ->get_or_create_proxy(channel_, dependencies, core::cg_proxy::DEFAULT_LAYER, L"hawrysklocka/clock")
                 ->add(0, L"hawrysklocka/clock", true, L"", data);
@@ -146,12 +153,14 @@ clk_command_handler create_send_xml_handler(const std::wstring&                 
 }
 
 void add_command_handlers(clk_command_processor&                                      processor,
+                          const spl::shared_ptr<core::video_format_registry>&         format_registry,
                           const std::vector<spl::shared_ptr<core::video_channel>>&    channels,
                           const spl::shared_ptr<core::video_channel>&                 channel,
                           const spl::shared_ptr<core::cg_producer_registry>&          cg_registry,
                           const spl::shared_ptr<const core::frame_producer_registry>& producer_registry)
 {
-    auto context = spl::make_shared<command_context>(channels, channel, cg_registry, producer_registry);
+    auto context =
+        spl::make_shared<command_context>(format_registry, channels, channel, cg_registry, producer_registry);
 
     processor.add_handler(L"DUR", create_send_xml_handler(L"DUR", true, true, context))
         .add_handler(L"NEWDUR", create_send_xml_handler(L"NEWDUR", true, true, context))

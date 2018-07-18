@@ -58,11 +58,13 @@ void frame_producer_registry::register_producer_factory(std::wstring name, const
 frame_producer_dependencies::frame_producer_dependencies(
     const spl::shared_ptr<core::frame_factory>&          frame_factory,
     const std::vector<spl::shared_ptr<video_channel>>&   channels,
+    const spl::shared_ptr<core::video_format_registry>&  format_registry,
     const video_format_desc&                             format_desc,
     const spl::shared_ptr<const frame_producer_registry> producer_registry,
     const spl::shared_ptr<const cg_producer_registry>    cg_registry)
     : frame_factory(frame_factory)
     , channels(channels)
+    , format_registry(format_registry)
     , format_desc(format_desc)
     , producer_registry(producer_registry)
     , cg_registry(cg_registry)
