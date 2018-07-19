@@ -28,6 +28,8 @@
 #include <common/memory.h>
 #include <common/tweener.h>
 
+#include <core/frame/draw_frame.h>
+
 #include <boost/optional.hpp>
 
 #include <functional>
@@ -40,6 +42,13 @@ FORWARD2(caspar, diagnostics, class graph);
 
 namespace caspar { namespace core {
 
+struct layer_frame
+{
+    draw_frame foreground;
+    draw_frame background;
+    bool       has_background;
+};
+
 class stage final
 {
     stage(const stage&);
@@ -51,7 +60,8 @@ class stage final
 
     explicit stage(int channel_index, spl::shared_ptr<caspar::diagnostics::graph> graph);
 
-    std::map<int, draw_frame> operator()(const video_format_desc& format_desc, int nb_samples);
+    std::map<int, layer_frame>
+    operator()(const video_format_desc& format_desc, int nb_samples, std::vector<int>& fetch_background);
 
     std::future<void> apply_transforms(const std::vector<transform_tuple_t>& transforms);
     std::future<void>
