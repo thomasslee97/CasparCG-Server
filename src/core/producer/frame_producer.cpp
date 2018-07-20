@@ -76,7 +76,7 @@ const spl::shared_ptr<frame_producer>& frame_producer::empty()
       public:
         empty_frame_producer() {}
 
-        draw_frame                receive_impl(int nb_samples) override { return draw_frame{}; }
+        draw_frame                receive_impl(int nb_samples, bool consume_frame) override { return draw_frame{}; }
         uint32_t                  nb_frames() const override { return 0; }
         std::wstring              print() const override { return L"empty"; }
         std::wstring              name() const override { return L"empty"; }
@@ -165,7 +165,7 @@ class destroy_producer_proxy : public frame_producer
         });
     }
 
-    draw_frame                receive_impl(int nb_samples) override { return producer_->receive_impl(nb_samples); }
+    draw_frame                receive_impl(int nb_samples, bool consume_frame) override { return producer_->receive_impl(nb_samples, consume_frame); }
     std::wstring              print() const override { return producer_->print(); }
     std::wstring              name() const override { return producer_->name(); }
     std::future<std::wstring> call(const std::vector<std::wstring>& params) override { return producer_->call(params); }

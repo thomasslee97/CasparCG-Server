@@ -55,9 +55,9 @@ class frame_producer
     frame_producer() {}
     virtual ~frame_producer() {}
 
-    draw_frame receive(int nb_samples)
+    draw_frame receive(int nb_samples, bool consume_frame)
     {
-        auto frame = receive_impl(nb_samples);
+        auto frame = receive_impl(nb_samples, consume_frame);
 
         if (frame) {
             frame_number_ += 1;
@@ -67,7 +67,7 @@ class frame_producer
         return frame;
     }
 
-    virtual draw_frame                receive_impl(int nb_samples) = 0;
+    virtual draw_frame                receive_impl(int nb_samples, bool consume_frame) = 0;
     virtual std::future<std::wstring> call(const std::vector<std::wstring>& params)
     {
         CASPAR_THROW_EXCEPTION(not_implemented());
@@ -85,7 +85,7 @@ class frame_producer
     virtual draw_frame   last_frame()
     {
         if (!frame_) {
-            frame_ = receive_impl(0);
+            frame_ = receive_impl(0, false);
         }
         return frame_;
     }

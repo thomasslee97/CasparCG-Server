@@ -124,10 +124,12 @@ class html_client
         });
     }
 
-    core::draw_frame receive()
+    core::draw_frame receive(bool consume_frame)
     {
         auto frame = last_frame();
-        executor_.begin_invoke([&] { update(); });
+        if (consume_frame || !frame) {
+            executor_.begin_invoke([&] { update(); });
+        }
         return frame;
     }
 
@@ -397,10 +399,10 @@ class html_producer : public core::frame_producer
 
     std::wstring name() const override { return L"html"; }
 
-    core::draw_frame receive_impl(int nb_samples) override
+    core::draw_frame receive_impl(int nb_samples, bool consume_frame) override
     {
         if (client_) {
-            return client_->receive();
+            return client_->receive(consume_frame);
         }
 
         return core::draw_frame::empty();

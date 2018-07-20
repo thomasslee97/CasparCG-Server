@@ -98,7 +98,7 @@ class color_producer : public frame_producer
 
     // frame_producer
 
-    draw_frame receive_impl(int nb_samples) override
+    draw_frame receive_impl(int nb_samples, bool consume_frame) override
     {
         CASPAR_SCOPE_EXIT { state_["color"] = color_str_; };
 

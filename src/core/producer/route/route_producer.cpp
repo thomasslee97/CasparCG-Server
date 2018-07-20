@@ -84,8 +84,10 @@ class route_producer : public frame_producer
         return core::draw_frame::still(frame_);
     }
 
-    draw_frame receive_impl(int nb_samples) override
+    draw_frame receive_impl(int nb_samples, bool consume_frame) override
     {
+        // TODO - peek first frame? or do we not need to as it is realtime?
+
         core::draw_frame frame;
         if (!buffer_.try_pop(frame)) {
             graph_->set_tag(diagnostics::tag_severity::WARNING, "late-frame");

@@ -103,7 +103,14 @@ struct ffmpeg_producer : public core::frame_producer
 
     core::draw_frame last_frame() override { return producer_->prev_frame(); }
 
-    core::draw_frame receive_impl(int nb_samples) override { return producer_->next_frame(); }
+    core::draw_frame receive_impl(int nb_samples, bool consume_frame) override {
+        // TODO - test this
+        if (!consume_frame){
+            return producer_->prev_frame();
+        } else {
+            return producer_->next_frame();
+        }
+    }
 
     std::uint32_t frame_number() const override { return static_cast<std::uint32_t>(producer_->time()); }
 

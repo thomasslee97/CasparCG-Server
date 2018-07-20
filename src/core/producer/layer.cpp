@@ -44,8 +44,7 @@ struct layer::impl
     spl::shared_ptr<frame_producer> background_ = frame_producer::empty();
 
     boost::optional<int32_t> auto_play_delta_;
-    bool                     paused_               = false;
-    bool                     background_previewed_ = false;
+    bool                     paused_ = false;
 
   public:
     void pause() { paused_ = true; }
@@ -54,9 +53,8 @@ struct layer::impl
 
     void load(spl::shared_ptr<frame_producer> producer, bool preview, const boost::optional<int32_t>& auto_play_delta)
     {
-        background_           = std::move(producer);
-        auto_play_delta_      = auto_play_delta;
-        background_previewed_ = false;
+        background_      = std::move(producer);
+        auto_play_delta_ = auto_play_delta;
 
         if (auto_play_delta_ && foreground_ == frame_producer::empty()) {
             play();
@@ -103,7 +101,7 @@ struct layer::impl
                 }
             }
 
-            auto frame = paused_ ? core::draw_frame{} : foreground_->receive(nb_samples);
+            auto frame = paused_ ? core::draw_frame{} : foreground_->receive(nb_samples, true);
             if (!frame) {
                 frame = foreground_->last_frame();
             }
@@ -123,14 +121,7 @@ struct layer::impl
     draw_frame receive_background(const video_format_desc& format_desc, int nb_samples)
     {
         try {
-            if (background_ == frame_producer::empty())
-                return core::draw_frame{};
-
-            if (background_previewed_)
-                return background_->last_frame();
-
-            background_previewed_ = true;
-            return background_->receive(nb_samples);
+            return background_->receive(nb_samples, false);
 
         } catch (...) {
             CASPAR_LOG_CURRENT_EXCEPTION();

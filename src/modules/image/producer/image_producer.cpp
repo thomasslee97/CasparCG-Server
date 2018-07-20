@@ -105,7 +105,7 @@ struct image_producer : public core::frame_producer
 
     core::draw_frame last_frame() override { return frame_; }
 
-    core::draw_frame receive_impl(int nb_samples) override
+    core::draw_frame receive_impl(int nb_samples, bool consume_frame) override
     {
         state_["file/path"] = description_;
         return frame_;
