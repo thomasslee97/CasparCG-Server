@@ -242,8 +242,6 @@ namespace caspar {
             // Any producer which exposes a fixed duration will work here, not just ffmpeg
             auto mask_producer = dependencies.producer_registry->create_producer(dependencies, info.mask_filename);
             info.duration = mask_producer->nb_frames();
-            if (mode != field_mode::progressive)
-                info.duration = (info.duration + 1) / 2;
             
             auto overlay_producer = frame_producer::empty();
             if (info.overlay_filename != L"") {
