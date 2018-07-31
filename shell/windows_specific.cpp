@@ -82,27 +82,32 @@ void change_icon(const HICON hNewIcon)
 
 void setup_console_window()
 {
-	auto hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-	auto hIn = GetStdHandle(STD_INPUT_HANDLE);
- 
-	// Disable Win 10 QuickEdit Mode.
-	SetConsoleMode(hIn, ENABLE_EXTENDED_FLAGS | ENABLE_INSERT_MODE);
+        auto  hOut           = GetStdHandle(STD_OUTPUT_HANDLE);
+        auto  hIn            = GetStdHandle(STD_INPUT_HANDLE);
+        DWORD dwPreviousMode = 0;
+        if (hIn != INVALID_HANDLE_VALUE && GetConsoleMode(hIn, &dwPreviousMode)) {
+            dwPreviousMode &= (~ENABLE_QUICK_EDIT_MODE) | ENABLE_EXTENDED_FLAGS; // disable quick edit mode
+            dwPreviousMode &= ENABLE_PROCESSED_INPUT | ~ENABLE_MOUSE_INPUT;      // allow mouse wheel scrolling
+            SetConsoleMode(hIn, dwPreviousMode);
+        }
 	
 	// Disable close button in console to avoid shutdown without cleanup.
 	EnableMenuItem(GetSystemMenu(GetConsoleWindow(), FALSE), SC_CLOSE, MF_GRAYED);
 	DrawMenuBar(GetConsoleWindow());
 	//SetConsoleCtrlHandler(HandlerRoutine, true);
 
-	// Configure console size and position.
-	auto coord = GetLargestConsoleWindowSize(hOut);
-	coord.X /= 2;
+	if (hOut != INVALID_HANDLE_VALUE) {
+            // Configure console size and position.
+            auto coord = GetLargestConsoleWindowSize(hOut);
+            coord.X /= 2;
 
-	SetConsoleScreenBufferSize(hOut, coord);
+	    SetConsoleScreenBufferSize(hOut, coord);
 
-	SMALL_RECT DisplayArea = { 0, 0, 0, 0 };
-	DisplayArea.Right = coord.X - 1;
-	DisplayArea.Bottom = (coord.Y - 1) / 2;
-	SetConsoleWindowInfo(hOut, TRUE, &DisplayArea);
+	    SMALL_RECT DisplayArea = { 0, 0, 0, 0 };
+	    DisplayArea.Right = coord.X - 1;
+	    DisplayArea.Bottom = (coord.Y - 1) / 2;
+	    SetConsoleWindowInfo(hOut, TRUE, &DisplayArea);
+        }
 
 	change_icon(::LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(101)));
 
