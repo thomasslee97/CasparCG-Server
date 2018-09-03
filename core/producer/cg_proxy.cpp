@@ -411,6 +411,7 @@ public:
 	void								leading_producer(const spl::shared_ptr<frame_producer>& producer) override	{ return producer_->leading_producer(producer); }
 	uint32_t							nb_frames() const override													{ return producer_->nb_frames(); }
 	draw_frame							last_frame()																{ return producer_->last_frame(); }
+	draw_frame							first_frame()																{ return producer_->first_frame(); }
 	monitor::subject&					monitor_output() override													{ return producer_->monitor_output(); }
 	bool								collides(double x, double y) const override									{ return producer_->collides(x, y); }
 	void								on_interaction(const interaction_event::ptr& event)	override				{ return producer_->on_interaction(event); }

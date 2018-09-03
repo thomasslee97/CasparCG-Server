@@ -79,6 +79,10 @@ namespace caspar {
             {
                 return (current_frame_ >= static_cast<uint32_t>(info_.trigger_point));
             }
+            
+            draw_frame first_frame() override { 
+                return dest_producer_->first_frame(); 
+            }
 
             draw_frame receive_impl() override
             {

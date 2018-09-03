@@ -96,7 +96,8 @@ public:
 	virtual boost::property_tree::wptree		info() const = 0;
 	virtual uint32_t							nb_frames() const = 0;
 	virtual uint32_t							frame_number() const = 0;
-	virtual draw_frame							last_frame() = 0;
+        virtual draw_frame                                                      last_frame()         = 0;
+        virtual draw_frame                                                      first_frame()         = 0;
 	virtual constraints&						pixel_constraints() = 0;
 	virtual void								leading_producer(const spl::shared_ptr<frame_producer>&) {}
 };
@@ -124,7 +125,8 @@ public:
 	void						paused(bool value) override;
 	uint32_t					nb_frames() const override;
 	uint32_t					frame_number() const override;
-	virtual draw_frame			last_frame() override;
+        virtual draw_frame                              last_frame() override;
+        virtual draw_frame                              first_frame() override;
 
 private:
 	virtual draw_frame			receive() override;

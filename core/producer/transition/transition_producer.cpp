@@ -64,6 +64,10 @@ public:
 	{
 		source_producer_ = producer;
 	}
+            
+        draw_frame first_frame() override { 
+            return dest_producer_->first_frame(); 
+        }
 
 	draw_frame receive_impl() override
 	{

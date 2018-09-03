@@ -128,13 +128,7 @@ public:
         {
             try
             {
-                if (background_ == frame_producer::empty())
-                    return draw_frame::empty();
-
-                auto frame = background_->receive();
-                background_->paused(true);
-
-                return frame;
+                return background_->first_frame();
             }
             catch (...)
             {

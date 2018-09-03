@@ -98,10 +98,12 @@ struct frame_producer_base::impl
     tbb::atomic<bool>     paused_;
     frame_producer_base&  self_;
     draw_frame            last_frame_;
+    draw_frame            first_frame_;
 
     impl(frame_producer_base& self)
         : self_(self)
         , last_frame_(draw_frame::empty())
+        , first_frame_(draw_frame::empty())
     {
         frame_number_ = 0;
         paused_       = false;
@@ -118,7 +120,18 @@ struct frame_producer_base::impl
 
         ++frame_number_;
 
+        if (first_frame_ == draw_frame::empty())
+            first_frame_ = draw_frame::push(frame);
+
         return last_frame_ = draw_frame::push(frame);
+    }
+
+    draw_frame first_frame()
+    {
+        if (first_frame_ != draw_frame::empty())
+            return draw_frame::still(first_frame_);
+
+        return first_frame_ = receive();
     }
 
     void paused(bool value) { paused_ = value; }
@@ -136,6 +149,7 @@ draw_frame frame_producer_base::receive() { return impl_->receive(); }
 void frame_producer_base::paused(bool value) { impl_->paused(value); }
 
 draw_frame frame_producer_base::last_frame() { return impl_->last_frame(); }
+draw_frame frame_producer_base::first_frame() { return impl_->first_frame(); }
 
 std::future<std::wstring> frame_producer_base::call(const std::vector<std::wstring>&)
 {
@@ -191,6 +205,7 @@ const spl::shared_ptr<frame_producer>& frame_producer::empty()
             return empty;
         }
         draw_frame   last_frame() { return draw_frame::empty(); }
+        draw_frame   first_frame() { return draw_frame::empty(); }
         constraints& pixel_constraints() override
         {
             static constraints c;
@@ -300,6 +315,7 @@ class destroy_producer_proxy : public frame_producer
     }
     uint32_t          nb_frames() const override { return producer_->nb_frames(); }
     draw_frame        last_frame() { return producer_->last_frame(); }
+    draw_frame        first_frame() { return producer_->first_frame(); }
     monitor::subject& monitor_output() override { return producer_->monitor_output(); }
     bool              collides(double x, double y) const override { return producer_->collides(x, y); }
     void on_interaction(const interaction_event::ptr& event) override { return producer_->on_interaction(event); }
