@@ -1,4 +1,4 @@
-CasparCG Server
+Sofie: The Modern TV News Studio Automation System (Sofie-specific fork of CasparCG Server 2.1 where most modifications have been contributed back to the main branch of 2.1 and 2.2)
 ===============
 
 Thank you for your interest in CasparCG Server, a professional software used to
@@ -16,9 +16,6 @@ You can find the latest unstable CasparCG Server development builds on [http://b
 
 See [BUILDING](BUILDING?raw=true) for instructions on how to build the CasparCG Server from source manually.
 
-**Join our development IRC channel on the Freenode network.**
-
-[![Visit our IRC channel](https://kiwiirc.com/buttons/sinisalo.freenode.net/CasparCG.png)](https://kiwiirc.com/client/sinisalo.freenode.net/?nick=Guest|?#CasparCG)
 
 License
 -------
