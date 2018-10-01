@@ -206,6 +206,10 @@ public:
 		return receive_impl();
 	}
 
+        core::draw_frame first_frame() override {
+            return receive_impl();
+        }
+
 	core::draw_frame last_frame() override
 	{
 		return last_frame_;
