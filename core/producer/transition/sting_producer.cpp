@@ -84,9 +84,14 @@ namespace caspar {
                 return dest_producer_->first_frame(); 
             }
 
+            draw_frame dest_ = draw_frame::empty();
+            draw_frame source_ = draw_frame::empty();
+            draw_frame mask_ = draw_frame::empty();
+            draw_frame overlay_ = draw_frame::empty();
+
             draw_frame receive_impl() override
             {
-                if (current_frame_ >= info_.duration || mask_producer_ == frame_producer::empty())
+                if (has_finished() || mask_producer_ == frame_producer::empty())
                 {
                     source_producer_ = frame_producer::empty();
                     mask_producer_ = frame_producer::empty();
@@ -94,48 +99,72 @@ namespace caspar {
                     return dest_producer_->receive();
                 }
 
-                current_frame_ += 1;
-
-                auto dest = draw_frame::empty();
-                auto source = draw_frame::empty();
-                auto mask = draw_frame::empty();
-                auto overlay = draw_frame::empty();
-
                 tbb::parallel_invoke(
                     [&]
                 {
+                    if (dest_ != draw_frame::empty())
+                        return;
+
                     if (!is_dest_running()) {
-                        dest = draw_frame::empty();
+                        dest_ = draw_frame::empty();
                         return;
                     }
 
-                    dest = dest_producer_->receive();
-                    if (dest == draw_frame::late())
-                        dest = dest_producer_->last_frame();
+                    dest_ = dest_producer_->receive();
+                    if (dest_ == draw_frame::late())
+                        dest_ = dest_producer_->last_frame();
                 },
                     [&]
                 {
-                    source = source_producer_->receive();
-                    if (source == draw_frame::late())
-                        source = source_producer_->last_frame();
+                    if (source_ != draw_frame::empty())
+                        return;
+
+                    source_ = source_producer_->receive();
+                    if (source_ == draw_frame::late())
+                        source_ = source_producer_->last_frame();
                 },
                     [&]
                 {
-                    mask = mask_producer_->receive();
-                    if (mask == draw_frame::late())
-                        mask = mask_producer_->last_frame();
+                    if (mask_ != draw_frame::empty())
+                        return;
+
+                    mask_ = mask_producer_->receive();
+                    if (mask_ == draw_frame::late())
+                        mask_ = mask_producer_->last_frame();
                 },
                     [&]
                 {
-                    overlay = overlay_producer_->receive();
-                    if (overlay == draw_frame::late())
-                        overlay = overlay_producer_->last_frame();
+                    if (overlay_ != draw_frame::empty())
+                        return;
+
+                    overlay_ = overlay_producer_->receive();
+                    if (overlay_ == draw_frame::late())
+                        overlay_ = overlay_producer_->last_frame();
                 });
+
+                if (dest_ == draw_frame::empty() || mask_ == draw_frame::empty() || (overlay_producer_ != frame_producer::empty() && overlay_ == draw_frame::empty())) {
+                    if (current_frame_ == 0) {
+                        auto res = source_;
+                        source_ = draw_frame::empty();
+                        return res;
+                    }
+
+                    return last_frame();
+                }
+
+                current_frame_ += 1;
 
                 // TODO include info on the mask and overlay producers
                 *monitor_subject_ << monitor::message("/transition/frame") % static_cast<int>(current_frame_) % static_cast<int>(info_.duration);
 
-                return compose(dest, source, mask, overlay);
+                const auto res = compose(dest_, source_, mask_, overlay_);
+
+                source_ = draw_frame::empty();
+                dest_ = draw_frame::empty();
+                mask_ = draw_frame::empty();
+                overlay_ = draw_frame::empty();
+
+                return res;
             }
 
             const spl::shared_ptr<frame_producer>& primary_producer() const

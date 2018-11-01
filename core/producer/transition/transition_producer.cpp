@@ -77,8 +77,6 @@ public:
 			return dest_producer_->receive();
 		}
 
-		current_frame_ += 1;
-
 		auto dest = draw_frame::empty();
 		auto source = draw_frame::empty();
 
@@ -95,6 +93,12 @@ public:
 			if(source == core::draw_frame::late())
 				source = source_producer_->last_frame();
 		});
+
+                if (dest == draw_frame::empty() || dest == draw_frame{}) {
+                    return source;
+                }
+
+                current_frame_ += 1;
 
 		*monitor_subject_	<< monitor::message("/transition/frame") % current_frame_ % info_.duration
 							<< monitor::message("/transition/type") % [&]() -> std::string

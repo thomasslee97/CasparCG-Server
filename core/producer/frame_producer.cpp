@@ -120,6 +120,9 @@ struct frame_producer_base::impl
 
         ++frame_number_;
 
+        if (frame == draw_frame::empty())
+            return frame;
+
         if (first_frame_ == draw_frame::empty())
             first_frame_ = draw_frame::push(frame);
 
