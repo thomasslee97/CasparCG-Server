@@ -136,6 +136,9 @@ public:
 
 std::wstring get_hex_color(const std::wstring& str)
 {
+        if (str.size() == 0)
+            return L"#00000000";
+
 	if(str.at(0) == '#')
 		return str.length() == 7 ? L"#FF" + str.substr(1) : str;
 
@@ -256,8 +259,15 @@ spl::shared_ptr<frame_producer> create_color_producer(const spl::shared_ptr<fram
 
 	for (auto& param : params)
 	{
-		if (try_get_color(param, value))
-			colors.push_back(param);
+            if (try_get_color(param, value))
+            {
+                colors.push_back(param);
+            }
+            else
+            {
+                // Stop after something not a colour, as that probably means the transition definition
+                break;
+            }
 	}
 
 	return spl::make_shared<color_producer>(frame_factory, colors);
