@@ -137,7 +137,7 @@ public:
 std::wstring get_hex_color(const std::wstring& str)
 {
         if (str.size() == 0)
-            return L"#00000000";
+            return str;
 
 	if(str.at(0) == '#')
 		return str.length() == 7 ? L"#FF" + str.substr(1) : str;
