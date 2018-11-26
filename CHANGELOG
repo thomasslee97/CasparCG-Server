@@ -1,10 +1,14 @@
 C H A N G E S
 
+CasparCG 2.1.3 NRK (w.r.t 2.1.2 NRK)
+==========================================
+
+  o Fix colour producer trying to interpret too many parameters as the colour(s) to use
+
 CasparCG 2.1.2 NRK (w.r.t 2.1.1 NRK)
 ==========================================
 
   o Fix performance when using route background of ffmpeg producer
-
 
 CasparCG 2.1.1 NRK (w.r.t 2.1.0 NRK)
 ==========================================
