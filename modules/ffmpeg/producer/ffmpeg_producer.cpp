@@ -800,7 +800,12 @@ spl::shared_ptr<core::frame_producer> create_producer(
 	auto get_source_framerate	= [=] { return producer->get_out_framerate(); };
 	auto target_framerate		= dependencies.format_desc.framerate;
 
-	return core::create_destroy_proxy(producer);
+	return core::create_destroy_proxy(core::create_framerate_producer(
+			producer,
+			get_source_framerate,
+			target_framerate,
+			dependencies.format_desc.field_mode,
+			dependencies.format_desc.audio_cadence));
 }
 
 core::draw_frame create_thumbnail_frame(
