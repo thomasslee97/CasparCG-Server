@@ -117,6 +117,9 @@ struct frame_producer_base::impl
 
 		++frame_number_;
 
+		if (frame == draw_frame::empty())
+			return frame;
+
 		return last_frame_ = draw_frame::push(frame);
 	}
 

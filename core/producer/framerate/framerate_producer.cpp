@@ -234,6 +234,8 @@ public:
 	{
 		// destination field mode initially unknown but known after the first update_source_framerate().
 		auto field1 = do_render_progressive_frame(true);
+                if (field1 == draw_frame::empty())
+                    return field1;
 
 		if (destination_fieldmode_ == field_mode::progressive)
 		{
@@ -356,8 +358,14 @@ private:
 			return attach_sound(frame);
 		}
 
-		if (previous_frame_ == draw_frame::empty())
+		if (previous_frame_ == draw_frame::empty()) {
 			previous_frame_ = pop_frame_from_source();
+
+			if (previous_frame_ == draw_frame::empty()) {
+				// Still empty, not ready yet.
+				return draw_frame::empty();
+			}
+		}
 
 		auto current_frame_number	= current_frame_number_;
 		auto distance				= current_frame_number_ - boost::rational_cast<int64_t>(current_frame_number_);
@@ -408,6 +416,9 @@ private:
 	draw_frame pop_frame_from_source()
 	{
 		auto frame = source_->receive();
+		if (frame == draw_frame::empty())
+			return frame;
+
 		update_source_framerate();
 
 		if (user_speed_.fetch() == 1)
