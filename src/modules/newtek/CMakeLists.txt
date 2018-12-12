@@ -2,13 +2,13 @@ cmake_minimum_required (VERSION 2.6)
 project (newtek)
 
 set(SOURCES
-		consumer/newtek_ivga_consumer.cpp
+		# consumer/newtek_ivga_consumer.cpp
 
 		consumer/newtek_ndi_consumer.cpp
 
 		producer/newtek_ndi_producer.cpp
-        
-		util/air_send.cpp
+
+		# util/air_send.cpp
 
 		util/ndi.cpp
 
@@ -17,13 +17,13 @@ set(SOURCES
 		StdAfx.cpp
 )
 set(HEADERS
-		consumer/newtek_ivga_consumer.h
+		# consumer/newtek_ivga_consumer.h
 
 		consumer/newtek_ndi_consumer.h
 
 		producer/newtek_ndi_producer.h
-        
-		util/air_send.h
+
+		# util/air_send.h
 
 		util/ndi.h
 

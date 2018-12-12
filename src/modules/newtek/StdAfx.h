@@ -43,3 +43,16 @@
 #include <common/log.h>
 
 #include <assert.h>
+
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#endif
+extern "C" {
+#define __STDC_CONSTANT_MACROS
+#define __STDC_LIMIT_MACROS
+#include <libavutil/pixfmt.h>
+}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif

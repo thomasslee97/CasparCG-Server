@@ -55,6 +55,8 @@
 #endif
 extern "C" {
 #include <libavformat/avformat.h>
+#include <libavutil/pixfmt.h>
+
 }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -250,9 +252,12 @@ struct newtek_ndi_producer : public core::frame_producer
         auto found_source = sources.find(src_name);
         if (found_source != sources.end()) {
             NDI_recv_create_desc.source_to_connect_to = found_source->second;
+            CASPAR_LOG(info) << L"[ndi] Connecting to source " << found_source->second.p_url_address;
         } else {
             NDI_recv_create_desc.source_to_connect_to.p_ndi_name = src_name.c_str();
+            CASPAR_LOG(info) << L"[ndi] Connecting to source " << src_name.c_str();
         }
+
         NDI_recv_create_desc.p_ndi_recv_name = src_name.c_str();
         ndi_recv_instance_                   = ndi_lib_->NDIlib_recv_create_v3(&NDI_recv_create_desc);
         ndi_framesync_                       = ndi::fs_create(ndi_recv_instance_);

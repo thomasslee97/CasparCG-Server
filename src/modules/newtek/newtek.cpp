@@ -21,8 +21,10 @@
 
 #include "newtek.h"
 
+#ifdef WIN32
 #include "consumer/newtek_ivga_consumer.h"
 #include "util/air_send.h"
+#endif
 
 #include "consumer/newtek_ndi_consumer.h"
 #include "producer/newtek_ndi_producer.h"
@@ -39,9 +41,11 @@ namespace caspar { namespace newtek {
 void init(core::module_dependencies dependencies)
 {
     try {
+#ifdef WIN32
         dependencies.consumer_registry->register_consumer_factory(L"iVGA Consumer", create_ivga_consumer);
         dependencies.consumer_registry->register_preconfigured_consumer_factory(L"newtek-ivga",
                                                                                 create_preconfigured_ivga_consumer);
+#endif
 
         dependencies.consumer_registry->register_consumer_factory(L"NDI Consumer", create_ndi_consumer);
         dependencies.consumer_registry->register_preconfigured_consumer_factory(L"ndi",
@@ -52,7 +56,7 @@ void init(core::module_dependencies dependencies)
         bool autoload = caspar::env::properties().get(L"configuration.ndi.auto-load", false);
         if (autoload)
             ndi::load_library();
-    
+
     } catch (...) {
     }
 }
