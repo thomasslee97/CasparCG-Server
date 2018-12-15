@@ -238,33 +238,34 @@ class html_client
         paint_timer_.restart();
         CASPAR_ASSERT(CefCurrentlyOn(TID_UI));
 
-        // Did the shared texture change? // TODO - renable
-        if (shared_buffer_ && shared_handle != last_shared_handle_) { // shared_buffer_->share_handle()) {
+        // Did the shared texture change?
+        if (shared_buffer_ && shared_handle != last_shared_handle_) {
             shared_buffer_.reset();
         }
 
         // Open the shared texture.
         if (!shared_buffer_) {
-            core::pixel_format_desc pixel_desc;
-            pixel_desc.format = core::pixel_format::bgra;
-            pixel_desc.planes.push_back(core::pixel_format_desc::plane(1920, 1080, 4));
-
-            auto frame = frame_factory_->import_shared_handle(this, pixel_desc, shared_handle);
-
+            shared_buffer_ = frame_factory_->import_shared_handle(shared_handle);
             last_shared_handle_ = shared_handle;
+        }
 
-            {
-                std::lock_guard<std::mutex> lock(frames_mutex_);
+        core::pixel_format_desc pixel_desc;
+        pixel_desc.format = core::pixel_format::bgra;
+        pixel_desc.planes.push_back(core::pixel_format_desc::plane(1920, 1080, 4));
 
-                core::draw_frame f1 = core::draw_frame(std::move(frame));
-                //f1.transform().image_transform.fill_scale[1] = -1;
-                //f1.transform().image_transform.fill_translation[1] = -1;
+        auto frame = frame_factory_->create_frame(this, pixel_desc, shared_buffer_);
 
-                frames_.push(std::move(f1));
-                while (frames_.size() > 8) {
-                    frames_.pop();
-                    graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
-                }
+        {
+            std::lock_guard<std::mutex> lock(frames_mutex_);
+
+            core::draw_frame f1 = core::draw_frame(std::move(frame));
+            //f1.transform().image_transform.fill_scale[1] = -1;
+            //f1.transform().image_transform.fill_translation[1] = -1;
+
+            frames_.push(std::move(f1));
+            while (frames_.size() > 8) {
+                frames_.pop();
+                graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
             }
         }
 

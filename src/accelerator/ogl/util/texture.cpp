@@ -74,6 +74,11 @@ struct texture::impl
 
     void clear() { GL(glClearTexImage(id_, 0, FORMAT[stride_], TYPE[stride_], nullptr)); }
 
+    void copy_from(int texute_id)
+    {
+        GL(glCopyImageSubData(texute_id, GL_TEXTURE_2D, 0, 0, 0, 0, id_, GL_TEXTURE_2D, 0, 0, 0, 0, width_, height_, 1));
+    }
+
     void copy_from(buffer& src)
     {
         src.bind();
@@ -115,6 +120,7 @@ void texture::bind(int index) { impl_->bind(index); }
 void texture::unbind() { impl_->unbind(); }
 void texture::attach() { impl_->attach(); }
 void texture::clear() { impl_->clear(); }
+void texture::copy_from(int source) { impl_->copy_from(source); }
 void texture::copy_from(buffer& source) { impl_->copy_from(source); }
 void texture::copy_to(buffer& dest) { impl_->copy_to(dest); }
 int  texture::width() const { return impl_->width_; }

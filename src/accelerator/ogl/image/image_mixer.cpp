@@ -327,21 +327,27 @@ struct image_mixer::impl
             });
     }
 
-    core::mutable_frame import_shared_handle(const void* tag, const core::pixel_format_desc& desc, void* shared_handle) override
-    {
-        // TODO - ensure planes is 1
 
-        // Ensure d3d interop device exists
-        ogl_->dispatch_async([=]() {
+    std::shared_ptr<void> import_shared_handle(void* shared_handle)
+    {
+        return ogl_->dispatch_sync([&]() {
+            // Ensure d3d interop device exists
             if (!d3d_) {
                 d3d_ = std::make_shared<d3d_device>();
             }
+
+            return d3d_->create_texture(shared_handle);
         });
+    }
+
+    core::mutable_frame create_frame(const void* tag, const core::pixel_format_desc& desc, std::shared_ptr<void> shared_handle)
+    {
+        // TODO - ensure planes is 1
 
         std::weak_ptr<image_mixer::impl> weak_self = shared_from_this();
         return core::mutable_frame(
             tag,
-            std::vector<array<uint8_t>>{},
+            std::vector<array<uint8_t>>{}, // TODO - needs one array
             array<int32_t>{},
             desc,
             [weak_self, shared_handle, desc](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
@@ -351,7 +357,7 @@ struct image_mixer::impl
             }
 
             auto future = flatten(self->ogl_->dispatch_async([self, shared_handle, desc]() {
-                auto f = self->d3d_->create_texture(shared_handle);
+                auto f = std::static_pointer_cast<d3d_interop_texture>(shared_handle);
 
                 const auto plane = desc.planes[0];
 
@@ -361,7 +367,6 @@ struct image_mixer::impl
             std::vector<future_texture> textures{ future.share() };
             return std::make_shared<decltype(textures)>(std::move(textures));
         });
-
     }
 };
 
@@ -381,9 +386,13 @@ core::mutable_frame image_mixer::create_frame(const void* tag, const core::pixel
 {
     return impl_->create_frame(tag, desc);
 }
-core::mutable_frame image_mixer::import_shared_handle(const void* tag, const core::pixel_format_desc& desc, void* shared_handle)
+std::shared_ptr<void> image_mixer::import_shared_handle(void* shared_handle)
 {
-    return impl_->import_shared_handle(tag, desc, shared_handle);
+    return impl_->import_shared_handle(shared_handle);
+}
+core::mutable_frame image_mixer::create_frame(const void* tag, const core::pixel_format_desc& desc, std::shared_ptr<void> shared_handle)
+{
+    return impl_->create_frame(tag, desc, shared_handle);
 }
 
 }}} // namespace caspar::accelerator::ogl

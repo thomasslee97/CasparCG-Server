@@ -36,6 +36,7 @@ class texture final
     texture& operator=(const texture&) = delete;
     texture& operator                  =(texture&& other);
 
+    void copy_from(int texute_id);
     void copy_from(class buffer& source);
     void copy_to(class buffer& dest);
 
