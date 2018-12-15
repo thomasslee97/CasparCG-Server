@@ -324,6 +324,30 @@ struct image_mixer::impl
                 return std::make_shared<decltype(textures)>(std::move(textures));
             });
     }
+
+    std::pair<core::mutable_frame, int> create_gl_frame(const void* tag, const core::pixel_format_desc& desc) override
+    {
+        // TODO - ensure desc has 1 plane
+        
+        auto texture = ogl_->create_texture_async(desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride).get();
+
+        auto f = core::mutable_frame(
+            tag,
+            std::vector<array<uint8_t>>{},
+            array<int32_t>{},
+            desc,
+            [texture](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
+            CASPAR_LOG(info) << L"creating opaque";
+            std::vector<future_texture> textures { make_ready_future(texture).share() };
+            return std::make_shared<decltype(textures)>(std::move(textures));
+        });
+
+        return std::make_pair(std::move(f), texture->id());
+    }
+
+    void dispatch_tmp(std::function<void()> func) override {
+        ogl_->dispatch_sync(func);
+    }
 };
 
 image_mixer::image_mixer(const spl::shared_ptr<device>& ogl, int channel_id)
@@ -342,5 +366,11 @@ core::mutable_frame image_mixer::create_frame(const void* tag, const core::pixel
 {
     return impl_->create_frame(tag, desc);
 }
+
+std::pair<core::mutable_frame, int> image_mixer::create_gl_frame(const void* tag, const core::pixel_format_desc& desc) {
+    return impl_->create_gl_frame(tag, desc);
+}
+
+void image_mixer::dispatch_tmp(std::function<void()> func) { impl_->dispatch_tmp(func); }
 
 }}} // namespace caspar::accelerator::ogl

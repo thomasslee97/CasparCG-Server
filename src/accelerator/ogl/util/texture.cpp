@@ -28,7 +28,7 @@
 
 namespace caspar { namespace accelerator { namespace ogl {
 
-static GLenum FORMAT[]          = {0, GL_RED, GL_RG, GL_BGR, GL_BGRA};
+static GLenum FORMAT[]          = {0, GL_RED, GL_RG, GL_BGR, GL_RGBA};
 static GLenum INTERNAL_FORMAT[] = {0, GL_R8, GL_RG8, GL_RGB8, GL_RGBA8};
 static GLenum TYPE[] = {0, GL_UNSIGNED_BYTE, GL_UNSIGNED_BYTE, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT_8_8_8_8_REV};
 
@@ -44,18 +44,26 @@ struct texture::impl
     impl& operator=(const impl&) = delete;
 
   public:
-    impl(int width, int height, int stride)
+    impl(int width, int height, int stride, bool create_storage)
         : width_(width)
         , height_(height)
         , stride_(stride)
         , size_(width * height * stride)
     {
-        GL(glCreateTextures(GL_TEXTURE_2D, 1, &id_));
-        GL(glTextureParameteri(id_, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-        GL(glTextureParameteri(id_, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-        GL(glTextureParameteri(id_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
-        GL(glTextureParameteri(id_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
-        GL(glTextureStorage2D(id_, 1, INTERNAL_FORMAT[stride_], width_, height_));
+
+        if (create_storage)
+        {
+            GL(glCreateTextures(GL_TEXTURE_2D, 1, &id_));
+            GL(glTextureParameteri(id_, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
+            GL(glTextureParameteri(id_, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
+            GL(glTextureParameteri(id_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE));
+            GL(glTextureParameteri(id_, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
+            GL(glTextureStorage2D(id_, 1, INTERNAL_FORMAT[stride_], width_, height_));
+        }
+        else
+        {
+            GL(glGenTextures(1, &id_));
+        }
     }
 
     ~impl() { glDeleteTextures(1, &id_); }
@@ -97,8 +105,8 @@ struct texture::impl
     }
 };
 
-texture::texture(int width, int height, int stride)
-    : impl_(new impl(width, height, stride))
+texture::texture(int width, int height, int stride, bool create_storage)
+    : impl_(new impl(width, height, stride, create_storage))
 {
 }
 texture::texture(texture&& other)

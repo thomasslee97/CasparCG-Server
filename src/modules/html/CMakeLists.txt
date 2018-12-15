@@ -5,12 +5,14 @@ set(SOURCES
 		producer/html_cg_proxy.cpp
 		producer/html_producer.cpp
 
+		d3d_device.cpp
 		html.cpp
 )
 set(HEADERS
 		producer/html_cg_proxy.h
 		producer/html_producer.h
 
+		d3d_device.h
 		html.h
 )
 
@@ -21,6 +23,7 @@ include_directories(..)
 include_directories(../..)
 include_directories(${BOOST_INCLUDE_PATH})
 include_directories(${TBB_INCLUDE_PATH})
+include_directories(${GLEW_INCLUDE_PATH})
 include_directories(${CEF_INCLUDE_PATH})
 
 set_target_properties(html PROPERTIES FOLDER modules)
@@ -33,9 +36,9 @@ if(MSVC)
 		core
 
 		optimized release/libcef
-		optimized release/VS2015/libcef_dll_wrapper
+		optimized release/libcef_dll_wrapper
 		debug debug/libcef
-		debug debug/VS2015/libcef_dll_wrapper
+		debug debug/libcef_dll_wrapper
 	)
 else()
 	target_link_libraries(html

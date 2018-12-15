@@ -33,6 +33,10 @@ class frame_factory
     frame_factory(const frame_factory&) = delete;
 
     virtual class mutable_frame create_frame(const void* video_stream_tag, const struct pixel_format_desc& desc) = 0;
+
+    virtual std::pair<class mutable_frame, int> create_gl_frame(const void* tag, const pixel_format_desc& desc) = 0;
+
+    virtual void dispatch_tmp(std::function<void()> func) = 0;
 };
 
 }} // namespace caspar::core

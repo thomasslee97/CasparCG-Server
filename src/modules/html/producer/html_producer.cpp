@@ -62,6 +62,7 @@
 #include <utility>
 
 #include "../html.h"
+#include "../d3d_device.h"
 
 #pragma comment(lib, "libcef.lib")
 #pragma comment(lib, "libcef_dll_wrapper.lib")
@@ -95,6 +96,9 @@ class html_client
 
     executor executor_;
 
+    std::shared_ptr<d3d_device> d3d_device_;
+    std::shared_ptr<void> shared_buffer_;
+
   public:
     html_client(spl::shared_ptr<core::frame_factory>       frame_factory,
                 const spl::shared_ptr<diagnostics::graph>& graph,
@@ -112,6 +116,10 @@ class html_client
         graph_->set_color("late-frame", diagnostics::color(0.6f, 0.1f, 0.1f));
         graph_->set_text(print());
         diagnostics::register_graph(graph_);
+
+        frame_factory_->dispatch_tmp([&]() {
+            d3d_device_ = d3d_device::create();
+        });
 
         loaded_ = false;
         executor_.begin_invoke([&] {
@@ -181,12 +189,11 @@ class html_client
     }
 
   private:
-    bool GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override
+    void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override
     {
         CASPAR_ASSERT(CefCurrentlyOn(TID_UI));
 
         rect = CefRect(0, 0, format_desc_.square_width, format_desc_.square_height);
-        return true;
     }
 
     void OnPaint(CefRefPtr<CefBrowser> browser,
@@ -196,12 +203,12 @@ class html_client
                  int                   width,
                  int                   height) override
     {
+        if (type != PET_VIEW)
+            return;
+
         graph_->set_value("browser-tick-time", paint_timer_.elapsed() * format_desc_.fps * 0.5);
         paint_timer_.restart();
         CASPAR_ASSERT(CefCurrentlyOn(TID_UI));
-
-        if (type != PET_VIEW)
-            return;
 
         core::pixel_format_desc pixel_desc;
         pixel_desc.format = core::pixel_format::bgra;
@@ -221,6 +228,64 @@ class html_client
                 graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
             }
         }
+    }
+
+    virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+        PaintElementType type,
+        const RectList& dirtyRects,
+        void* shared_handle)
+    {
+        if (type != PET_VIEW || shared_handle == nullptr)
+            return;
+
+        graph_->set_value("browser-tick-time", paint_timer_.elapsed() * format_desc_.fps * 0.5);
+        paint_timer_.restart();
+        CASPAR_ASSERT(CefCurrentlyOn(TID_UI));
+
+        // Did the shared texture change? // TODO - renable
+        //if (shared_buffer_ && shared_handle != shared_buffer_->share_handle()) {
+            shared_buffer_.reset();
+        //}
+
+        // Open the shared texture.
+        if (!shared_buffer_) {
+            core::pixel_format_desc pixel_desc;
+            pixel_desc.format = core::pixel_format::bgra;
+            pixel_desc.planes.push_back(core::pixel_format_desc::plane(1280, 720, 4));
+
+            auto frame = frame_factory_->create_gl_frame(this, pixel_desc);
+
+            frame_factory_->dispatch_tmp([&]() {
+                shared_buffer_ = d3d_device_->open_shared_texture((void*)shared_handle, frame.second);
+                CASPAR_LOG(info) << L"d3d11: buffer created";
+            });
+
+            if (!shared_buffer_) {
+                CASPAR_LOG(error) << L"d3d11: Could not open shared texture!";
+                return;
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(frames_mutex_);
+
+                core::draw_frame f1 = core::draw_frame(core::const_frame(std::move(frame.first), shared_buffer_));
+                //f1.transform().image_transform.fill_scale[1] = -1;
+                //f1.transform().image_transform.fill_translation[1] = -1;
+
+                CASPAR_LOG(info) << L"d3d11: pushing frame";
+                frames_.push(std::move(f1));
+                CASPAR_LOG(info) << L"d3d11: pushed frame";
+                while (frames_.size() > 8) {
+                    frames_.pop();
+                    graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
+                }
+            }
+        }
+
+        // TODO - push frame even if it was the same
+
+        CASPAR_LOG(info) << L"got frame";
+
     }
 
     void OnAfterCreated(CefRefPtr<CefBrowser> browser) override
@@ -245,10 +310,12 @@ class html_client
     }
 
     bool OnConsoleMessage(CefRefPtr<CefBrowser> browser,
+                          cef_log_severity_t    level,
                           const CefString&      message,
                           const CefString&      source,
                           int                   line) override
     {
+        // TODO - map level?
         CASPAR_LOG(info) << print() << L" Log: " << message.ToWString();
         return true;
     }
@@ -376,6 +443,10 @@ class html_producer : public core::frame_producer
             window_info.windowless_rendering_enabled = true;
 
             const bool enable_gpu = env::properties().get(L"configuration.html.enable-gpu", false);
+
+#ifdef WIN32
+            window_info.shared_texture_enabled = enable_gpu;
+#endif
 
             CefBrowserSettings browser_settings;
             browser_settings.web_security = cef_state_t::STATE_DISABLED;

@@ -28,7 +28,7 @@ namespace caspar { namespace accelerator { namespace ogl {
 class texture final
 {
   public:
-    texture(int width, int height, int stride);
+    texture(int width, int height, int stride, bool create_storage);
     texture(const texture&) = delete;
     texture(texture&& other);
     ~texture();

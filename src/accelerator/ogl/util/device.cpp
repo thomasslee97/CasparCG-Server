@@ -158,7 +158,17 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
     std::wstring version() { return version_; }
 
-    std::shared_ptr<texture> create_texture(int width, int height, int stride, bool clear)
+
+    std::future<std::shared_ptr<texture>> create_texture_async(int width, int height, int stride, bool clear)
+    {
+        return dispatch_async([=] {
+            return std::make_shared<texture>(width, height, stride, false);
+            //return create_texture(width, height, stride, clear, false);
+        });
+    }
+
+
+    std::shared_ptr<texture> create_texture(int width, int height, int stride, bool clear, bool create_storage)
     {
         CASPAR_VERIFY(stride > 0 && stride < 5);
         CASPAR_VERIFY(width > 0 && height > 0);
@@ -168,7 +178,7 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
         std::shared_ptr<texture> tex;
         if (!pool->try_pop(tex)) {
-            tex = std::make_shared<texture>(width, height, stride);
+            tex = std::make_shared<texture>(width, height, stride, create_storage);
         }
 
         if (clear) {
@@ -221,7 +231,7 @@ struct device::impl : public std::enable_shared_from_this<impl>
                 std::memcpy(buf->data(), source.data(), source.size());
             }
 
-            auto tex = create_texture(width, height, stride, false);
+            auto tex = create_texture(width, height, stride, false, true);
             tex->copy_from(*buf);
             // TODO (perf) save tex on source
             return tex;
@@ -274,9 +284,13 @@ device::device()
 {
 }
 device::~device() {}
+std::future<std::shared_ptr<texture>> device::create_texture_async(int width, int height, int stride)
+{
+    return impl_->create_texture_async(width, height, stride, true);
+}
 std::shared_ptr<texture> device::create_texture(int width, int height, int stride)
 {
-    return impl_->create_texture(width, height, stride, true);
+    return impl_->create_texture(width, height, stride, true, true);
 }
 array<uint8_t> device::create_array(int size) { return impl_->create_array(size); }
 std::future<std::shared_ptr<texture>>

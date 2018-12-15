@@ -63,6 +63,7 @@ class const_frame final
                          const struct pixel_format_desc&        desc);
     const_frame(const const_frame& other);
     const_frame(mutable_frame&& other);
+    const_frame(mutable_frame&& other, boost::any tmp_data);
 
     ~const_frame();
 
@@ -90,7 +91,7 @@ class const_frame final
     bool operator>(const const_frame& other) const;
 
     explicit operator bool() const;
-
+    
   private:
     struct impl;
     std::shared_ptr<impl> impl_;

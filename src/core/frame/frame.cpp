@@ -94,6 +94,7 @@ struct const_frame::impl
     core::pixel_format_desc                desc_     = pixel_format::invalid;
     frame_geometry                         geometry_ = frame_geometry::get_default();
     boost::any                             opaque_;
+    boost::any                             opaque2_;
 
     impl(std::vector<array<const std::uint8_t>> image_data,
          array<const std::int32_t>              audio_data,
@@ -133,6 +134,22 @@ struct const_frame::impl
             opaque_ = other.impl_->commit_(image_data_);
         }
     }
+    impl(mutable_frame&& other, boost::any tmp_data)
+        : image_data_(std::make_move_iterator(other.impl_->image_data_.begin()),
+            std::make_move_iterator(other.impl_->image_data_.end()))
+        , audio_data_(std::move(other.impl_->audio_data_))
+        , desc_(std::move(other.impl_->desc_))
+        , geometry_(std::move(other.impl_->geometry_))
+        , opaque2_(tmp_data)
+    {
+        //if (desc_.planes.size() != image_data_.size()) {
+            //CASPAR_THROW_EXCEPTION(invalid_argument());
+        //}
+        if (other.impl_->commit_) {
+            opaque_ = other.impl_->commit_(image_data_);
+        }
+    }
+
 
     const array<const std::uint8_t>& image_data(std::size_t index) const { return image_data_.at(index); }
 
@@ -152,6 +169,10 @@ const_frame::const_frame(std::vector<array<const std::uint8_t>> image_data,
 }
 const_frame::const_frame(mutable_frame&& other)
     : impl_(new impl(std::move(other)))
+{
+}
+const_frame::const_frame(mutable_frame&& other, boost::any tmp_data)
+    : impl_(new impl(std::move(other), tmp_data))
 {
 }
 const_frame::const_frame(const const_frame& other)
