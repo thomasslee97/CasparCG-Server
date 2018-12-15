@@ -81,7 +81,7 @@ d3d_interop_texture::d3d_interop_texture(std::shared_ptr<ID3D11Device> device, s
 d3d_interop_texture::~d3d_interop_texture()
 {
     // TODO - order?
-    GL(glDeleteTextures(1, &gl_tex_id_));
+    //glDeleteTextures(1, &gl_tex_id_));
 }
 
 uint32_t d3d_interop_texture::width() const {

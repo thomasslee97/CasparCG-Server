@@ -76,7 +76,7 @@ struct texture::impl
 
     void copy_from(int source_id)
     {
-        GL(glCopyImageSubData(source_id, GL_TEXTURE_2D, 0, 0, 0, 0, id_, GL_TEXTURE_2D, 0, 0, 0, 0, width_ / 2, height_, 1));
+        GL(glCopyImageSubData(source_id, GL_TEXTURE_2D, 0, 0, 0, 0, id_, GL_TEXTURE_2D, 0, 0, 0, 0, width_, height_, 1));
     }
 
     void copy_from(buffer& src)

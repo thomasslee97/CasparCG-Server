@@ -345,22 +345,24 @@ struct image_mixer::impl
         // TODO - ensure planes is 1
 
         std::weak_ptr<image_mixer::impl> weak_self = shared_from_this();
+        std::weak_ptr< d3d_interop_texture> weak_shared_handle = std::static_pointer_cast<d3d_interop_texture>(shared_handle);
         return core::mutable_frame(
             tag,
             std::vector<array<uint8_t>>{}, // TODO - needs one array
             array<int32_t>{},
             desc,
-            [weak_self, shared_handle, desc](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
+            [weak_self, weak_shared_handle, desc](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
             auto self = weak_self.lock();
             if (!self) {
                 return boost::any{};
             }
 
-            auto future = flatten(self->ogl_->dispatch_async([self, shared_handle, desc]() {
-                auto f = std::static_pointer_cast<d3d_interop_texture>(shared_handle);
+            auto shared_handle = weak_shared_handle.lock();
+            if (!shared_handle) {
+                return boost::any{};
+            }
 
-                return self->ogl_->copy_async(f->gl_tex_id(), desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride);
-            }));
+            auto future = self->ogl_->copy_async(shared_handle->gl_tex_id(), desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride);
 
             std::vector<future_texture> textures{ future.share() };
             return std::make_shared<decltype(textures)>(std::move(textures));
