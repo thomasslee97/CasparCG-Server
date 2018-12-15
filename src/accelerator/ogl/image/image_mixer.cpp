@@ -359,9 +359,7 @@ struct image_mixer::impl
             auto future = flatten(self->ogl_->dispatch_async([self, shared_handle, desc]() {
                 auto f = std::static_pointer_cast<d3d_interop_texture>(shared_handle);
 
-                const auto plane = desc.planes[0];
-
-                return self->ogl_->copy_async(f->gl_tex_id(), plane.width, plane.height, plane.stride);
+                return self->ogl_->copy_async(f->gl_tex_id(), desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride);
             }));
 
             std::vector<future_texture> textures{ future.share() };

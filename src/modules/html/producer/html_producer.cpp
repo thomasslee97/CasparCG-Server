@@ -26,6 +26,7 @@
 #include <core/frame/draw_frame.h>
 #include <core/frame/frame.h>
 #include <core/frame/frame_factory.h>
+#include <core/frame/frame_transform.h>
 #include <core/frame/geometry.h>
 #include <core/frame/pixel_format.h>
 #include <core/monitor/monitor.h>
@@ -259,8 +260,8 @@ class html_client
             std::lock_guard<std::mutex> lock(frames_mutex_);
 
             core::draw_frame f1 = core::draw_frame(std::move(frame));
-            //f1.transform().image_transform.fill_scale[1] = -1;
-            //f1.transform().image_transform.fill_translation[1] = -1;
+            f1.transform().image_transform.fill_scale[1] = -1;
+            f1.transform().image_transform.fill_translation[1] = 1;
 
             frames_.push(std::move(f1));
             while (frames_.size() > 8) {
@@ -268,11 +269,6 @@ class html_client
                 graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
             }
         }
-
-        // TODO - push frame even if it was the same
-
-        //CASPAR_LOG(info) << L"got frame";
-
     }
 
     void OnAfterCreated(CefRefPtr<CefBrowser> browser) override

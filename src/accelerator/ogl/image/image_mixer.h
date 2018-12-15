@@ -46,7 +46,7 @@ class image_mixer final : public core::image_mixer
     core::mutable_frame                    create_frame(const void* tag, const core::pixel_format_desc& desc) override;
 
     std::shared_ptr<void> import_shared_handle(void* shared_handle) override;
-    core::mutable_frame create_frame(const void* video_stream_tag, const core::pixel_format_desc& desc, std::shared_ptr<void> shared_handle) override;
+    core::mutable_frame create_frame(const void* tag, const core::pixel_format_desc& desc, std::shared_ptr<void> shared_handle) override;
 
     // core::image_mixer
 

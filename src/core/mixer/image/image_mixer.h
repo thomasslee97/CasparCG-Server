@@ -51,7 +51,7 @@ class image_mixer
 
     virtual class std::shared_ptr<void> import_shared_handle(void* shared_handle) = 0;
 
-    virtual class mutable_frame create_frame(const void* video_stream_tag, const struct pixel_format_desc& desc, std::shared_ptr<void> shared_handle) = 0;
+    virtual class mutable_frame create_frame(const void* tag, const struct pixel_format_desc& desc, std::shared_ptr<void> shared_handle) = 0;
 };
 
 }} // namespace caspar::core
