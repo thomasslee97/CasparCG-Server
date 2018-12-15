@@ -154,10 +154,10 @@ casparcg_add_runtime_dependency("${LIBERATION_FONTS_BIN_PATH}/LiberationMono-Reg
 
 # CEF
 if (ENABLE_HTML)
-	set(CEF_INCLUDE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1859.g3563564_windows64_minimal")
-	set(CEF_BIN_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1859.g3563564_windows64_minimal/Release")
-	set(CEF_RESOURCE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1859.g3563564_windows64_minimal/Resources")
-	link_directories("${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1859.g3563564_windows64_minimal")
+	set(CEF_INCLUDE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64")
+	set(CEF_BIN_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64/Debug")
+	set(CEF_RESOURCE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64/Resources")
+	link_directories("${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64")
 
 	casparcg_add_runtime_dependency("${CEF_RESOURCE_PATH}/locales")
 	casparcg_add_runtime_dependency("${CEF_BIN_PATH}/swiftshader")
