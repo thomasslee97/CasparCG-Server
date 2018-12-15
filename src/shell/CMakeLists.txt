@@ -102,8 +102,6 @@ add_custom_target(casparcg_copy_dependencies ALL)
 set(OUTPUT_FOLDER "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}")
 add_custom_command(TARGET casparcg_copy_dependencies POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory \"${OUTPUT_FOLDER}\")
 
-
-
 if (MSVC)
 	foreach(FILE_TO_COPY ${CASPARCG_RUNTIME_DEPENDENCIES})
 		if(IS_DIRECTORY ${FILE_TO_COPY})
@@ -115,6 +113,17 @@ if (MSVC)
 			add_custom_command(TARGET casparcg_copy_dependencies POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy \"${FILE_TO_COPY}\" \"${CMAKE_CURRENT_BINARY_DIR}/\")
 		endif()
 	endforeach(FILE_TO_COPY)
+	
+	# Add manifest to fix CEF issue with win10 https://magpcss.org/ceforum/viewtopic.php?f=6&t=14721 
+	add_custom_command(
+		TARGET casparcg
+		POST_BUILD
+		COMMAND "mt.exe" -nologo
+				-manifest \"${CMAKE_CURRENT_SOURCE_DIR}/casparcg.manifest\"
+				-outputresource:"${OUTPUT_FOLDER}/casparcg.exe"\;\#1
+		COMMENT "Adding manifest..."
+	)
+
 else ()
 	ADD_CUSTOM_COMMAND (TARGET casparcg POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/shell/casparcg ${CMAKE_BINARY_DIR}/staging/bin/casparcg)
 	ADD_CUSTOM_COMMAND (TARGET casparcg POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/shell/casparcg.config ${CMAKE_BINARY_DIR}/staging/casparcg.config)

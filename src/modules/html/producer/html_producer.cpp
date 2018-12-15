@@ -272,9 +272,7 @@ class html_client
                 //f1.transform().image_transform.fill_scale[1] = -1;
                 //f1.transform().image_transform.fill_translation[1] = -1;
 
-                CASPAR_LOG(info) << L"d3d11: pushing frame";
                 frames_.push(std::move(f1));
-                CASPAR_LOG(info) << L"d3d11: pushed frame";
                 while (frames_.size() > 8) {
                     frames_.pop();
                     graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
@@ -284,7 +282,7 @@ class html_client
 
         // TODO - push frame even if it was the same
 
-        CASPAR_LOG(info) << L"got frame";
+        //CASPAR_LOG(info) << L"got frame";
 
     }
 
