@@ -44,9 +44,7 @@ class image_mixer final : public core::image_mixer
 
     std::future<array<const std::uint8_t>> operator()(const core::video_format_desc& format_desc) override;
     core::mutable_frame                    create_frame(const void* tag, const core::pixel_format_desc& desc) override;
-    std::pair<core::mutable_frame, int>    create_gl_frame(const void* tag, const core::pixel_format_desc& desc) override;
-
-    void dispatch_tmp(std::function<void()> func) override;
+    core::mutable_frame import_shared_handle(const void* tag, const core::pixel_format_desc& desc, void* shared_handle) override;
 
     // core::image_mixer
 

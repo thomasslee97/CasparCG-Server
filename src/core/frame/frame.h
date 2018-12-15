@@ -63,7 +63,6 @@ class const_frame final
                          const struct pixel_format_desc&        desc);
     const_frame(const const_frame& other);
     const_frame(mutable_frame&& other);
-    const_frame(mutable_frame&& other, boost::any tmp_data);
 
     ~const_frame();
 

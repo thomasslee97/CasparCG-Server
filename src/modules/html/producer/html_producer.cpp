@@ -62,7 +62,6 @@
 #include <utility>
 
 #include "../html.h"
-#include "../d3d_device.h"
 
 #pragma comment(lib, "libcef.lib")
 #pragma comment(lib, "libcef_dll_wrapper.lib")
@@ -96,7 +95,6 @@ class html_client
 
     executor executor_;
 
-    std::shared_ptr<d3d_device> d3d_device_;
     std::shared_ptr<void> shared_buffer_;
 
   public:
@@ -116,10 +114,6 @@ class html_client
         graph_->set_color("late-frame", diagnostics::color(0.6f, 0.1f, 0.1f));
         graph_->set_text(print());
         diagnostics::register_graph(graph_);
-
-        frame_factory_->dispatch_tmp([&]() {
-            d3d_device_ = d3d_device::create();
-        });
 
         loaded_ = false;
         executor_.begin_invoke([&] {
@@ -230,10 +224,12 @@ class html_client
         }
     }
 
-    virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+    void* last_shared_handle_;
+
+    void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
         PaintElementType type,
         const RectList& dirtyRects,
-        void* shared_handle)
+        void* shared_handle) override
     {
         if (type != PET_VIEW || shared_handle == nullptr)
             return;
@@ -243,32 +239,24 @@ class html_client
         CASPAR_ASSERT(CefCurrentlyOn(TID_UI));
 
         // Did the shared texture change? // TODO - renable
-        //if (shared_buffer_ && shared_handle != shared_buffer_->share_handle()) {
+        if (shared_buffer_ && shared_handle != last_shared_handle_) { // shared_buffer_->share_handle()) {
             shared_buffer_.reset();
-        //}
+        }
 
         // Open the shared texture.
         if (!shared_buffer_) {
             core::pixel_format_desc pixel_desc;
             pixel_desc.format = core::pixel_format::bgra;
-            pixel_desc.planes.push_back(core::pixel_format_desc::plane(1280, 720, 4));
+            pixel_desc.planes.push_back(core::pixel_format_desc::plane(1920, 1080, 4));
 
-            auto frame = frame_factory_->create_gl_frame(this, pixel_desc);
+            auto frame = frame_factory_->import_shared_handle(this, pixel_desc, shared_handle);
 
-            frame_factory_->dispatch_tmp([&]() {
-                shared_buffer_ = d3d_device_->open_shared_texture((void*)shared_handle, frame.second);
-                CASPAR_LOG(info) << L"d3d11: buffer created";
-            });
-
-            if (!shared_buffer_) {
-                CASPAR_LOG(error) << L"d3d11: Could not open shared texture!";
-                return;
-            }
+            last_shared_handle_ = shared_handle;
 
             {
                 std::lock_guard<std::mutex> lock(frames_mutex_);
 
-                core::draw_frame f1 = core::draw_frame(core::const_frame(std::move(frame.first), shared_buffer_));
+                core::draw_frame f1 = core::draw_frame(std::move(frame));
                 //f1.transform().image_transform.fill_scale[1] = -1;
                 //f1.transform().image_transform.fill_translation[1] = -1;
 

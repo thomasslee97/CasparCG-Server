@@ -49,9 +49,7 @@ class image_mixer
 
     class mutable_frame create_frame(const void* tag, const struct pixel_format_desc& desc) override = 0;
 
-    virtual std::pair<class core::mutable_frame, int>    create_gl_frame(const void* tag, const core::pixel_format_desc& desc) = 0;
-
-    virtual void dispatch_tmp(std::function<void()> func) = 0;
+    virtual class mutable_frame import_shared_handle(const void* tag, const  struct pixel_format_desc& desc, void* shared_handle) = 0;
 };
 
 }} // namespace caspar::core

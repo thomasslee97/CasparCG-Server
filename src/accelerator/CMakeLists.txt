@@ -7,6 +7,7 @@ set(SOURCES
 	ogl/image/image_shader.cpp
 
 	ogl/util/buffer.cpp
+	ogl/util/d3d_interop.cpp
 	ogl/util/device.cpp
 	ogl/util/shader.cpp
 	ogl/util/texture.cpp
@@ -20,6 +21,7 @@ set(HEADERS
 	ogl/image/image_shader.h
 
 	ogl/util/buffer.h
+	ogl/util/d3d_interop.h
 	ogl/util/device.h
 	ogl/util/shader.h
 	ogl/util/texture.h

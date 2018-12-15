@@ -5,14 +5,12 @@ set(SOURCES
 		producer/html_cg_proxy.cpp
 		producer/html_producer.cpp
 
-		d3d_device.cpp
 		html.cpp
 )
 set(HEADERS
 		producer/html_cg_proxy.h
 		producer/html_producer.h
 
-		d3d_device.h
 		html.h
 )
 

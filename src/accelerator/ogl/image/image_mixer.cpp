@@ -25,6 +25,7 @@
 #include "../util/buffer.h"
 #include "../util/device.h"
 #include "../util/texture.h"
+#include "../util/d3d_interop.h"
 
 #include <common/array.h>
 #include <common/future.h>
@@ -225,6 +226,7 @@ struct image_mixer::impl
     , public std::enable_shared_from_this<impl>
 {
     spl::shared_ptr<device>            ogl_;
+    std::shared_ptr<d3d_device>        d3d_;
     image_renderer                     renderer_;
     std::vector<core::image_transform> transform_stack_;
     std::vector<layer>                 layers_; // layer/stream/items
@@ -325,28 +327,41 @@ struct image_mixer::impl
             });
     }
 
-    std::pair<core::mutable_frame, int> create_gl_frame(const void* tag, const core::pixel_format_desc& desc) override
+    core::mutable_frame import_shared_handle(const void* tag, const core::pixel_format_desc& desc, void* shared_handle) override
     {
-        // TODO - ensure desc has 1 plane
-        
-        auto texture = ogl_->create_texture_async(desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride).get();
+        // TODO - ensure planes is 1
 
-        auto f = core::mutable_frame(
+        // Ensure d3d interop device exists
+        ogl_->dispatch_async([=]() {
+            if (!d3d_) {
+                d3d_ = std::make_shared<d3d_device>();
+            }
+        });
+
+        std::weak_ptr<image_mixer::impl> weak_self = shared_from_this();
+        return core::mutable_frame(
             tag,
             std::vector<array<uint8_t>>{},
             array<int32_t>{},
             desc,
-            [texture](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
-            CASPAR_LOG(info) << L"creating opaque";
-            std::vector<future_texture> textures { make_ready_future(texture).share() };
+            [weak_self, shared_handle, desc](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
+            auto self = weak_self.lock();
+            if (!self) {
+                return boost::any{};
+            }
+
+            auto future = flatten(self->ogl_->dispatch_async([self, shared_handle, desc]() {
+                auto f = self->d3d_->create_texture(shared_handle);
+
+                const auto plane = desc.planes[0];
+
+                return self->ogl_->copy_async(f->gl_tex_id(), plane.width, plane.height, plane.stride);
+            }));
+
+            std::vector<future_texture> textures{ future.share() };
             return std::make_shared<decltype(textures)>(std::move(textures));
         });
 
-        return std::make_pair(std::move(f), texture->id());
-    }
-
-    void dispatch_tmp(std::function<void()> func) override {
-        ogl_->dispatch_sync(func);
     }
 };
 
@@ -366,11 +381,9 @@ core::mutable_frame image_mixer::create_frame(const void* tag, const core::pixel
 {
     return impl_->create_frame(tag, desc);
 }
-
-std::pair<core::mutable_frame, int> image_mixer::create_gl_frame(const void* tag, const core::pixel_format_desc& desc) {
-    return impl_->create_gl_frame(tag, desc);
+core::mutable_frame image_mixer::import_shared_handle(const void* tag, const core::pixel_format_desc& desc, void* shared_handle)
+{
+    return impl_->import_shared_handle(tag, desc, shared_handle);
 }
-
-void image_mixer::dispatch_tmp(std::function<void()> func) { impl_->dispatch_tmp(func); }
 
 }}} // namespace caspar::accelerator::ogl

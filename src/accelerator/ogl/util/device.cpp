@@ -158,17 +158,7 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
     std::wstring version() { return version_; }
 
-
-    std::future<std::shared_ptr<texture>> create_texture_async(int width, int height, int stride, bool clear)
-    {
-        return dispatch_async([=] {
-            return std::make_shared<texture>(width, height, stride, false);
-            //return create_texture(width, height, stride, clear, false);
-        });
-    }
-
-
-    std::shared_ptr<texture> create_texture(int width, int height, int stride, bool clear, bool create_storage)
+    std::shared_ptr<texture> create_texture(int width, int height, int stride, bool clear)
     {
         CASPAR_VERIFY(stride > 0 && stride < 5);
         CASPAR_VERIFY(width > 0 && height > 0);
@@ -178,7 +168,7 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
         std::shared_ptr<texture> tex;
         if (!pool->try_pop(tex)) {
-            tex = std::make_shared<texture>(width, height, stride, create_storage);
+            tex = std::make_shared<texture>(width, height, stride);
         }
 
         if (clear) {
@@ -231,7 +221,7 @@ struct device::impl : public std::enable_shared_from_this<impl>
                 std::memcpy(buf->data(), source.data(), source.size());
             }
 
-            auto tex = create_texture(width, height, stride, false, true);
+            auto tex = create_texture(width, height, stride, false);
             tex->copy_from(*buf);
             // TODO (perf) save tex on source
             return tex;
@@ -277,6 +267,12 @@ struct device::impl : public std::enable_shared_from_this<impl>
             return array<const uint8_t>(ptr, size, std::move(buf));
         });
     }
+
+    std::future<std::shared_ptr<texture>> copy_async(GLuint source, int width, int height, int stride)
+    {
+        // TODO - this is a horrible temporary hack...
+        return make_ready_future<std::shared_ptr<texture>>(nullptr);
+    }
 };
 
 device::device()
@@ -284,13 +280,9 @@ device::device()
 {
 }
 device::~device() {}
-std::future<std::shared_ptr<texture>> device::create_texture_async(int width, int height, int stride)
-{
-    return impl_->create_texture_async(width, height, stride, true);
-}
 std::shared_ptr<texture> device::create_texture(int width, int height, int stride)
 {
-    return impl_->create_texture(width, height, stride, true, true);
+    return impl_->create_texture(width, height, stride, true);
 }
 array<uint8_t> device::create_array(int size) { return impl_->create_array(size); }
 std::future<std::shared_ptr<texture>>
@@ -301,6 +293,10 @@ device::copy_async(const array<const uint8_t>& source, int width, int height, in
 std::future<array<const uint8_t>> device::copy_async(const std::shared_ptr<texture>& source)
 {
     return impl_->copy_async(source);
+}
+std::future<std::shared_ptr<texture>> device::copy_async(GLuint source, int width, int height, int stride)
+{
+    return impl_->copy_async(source, width, height, stride);
 }
 void         device::dispatch(std::function<void()> func) { boost::asio::dispatch(impl_->service_, std::move(func)); }
 std::wstring device::version() const { return impl_->version(); }
