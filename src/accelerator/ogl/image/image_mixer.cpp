@@ -343,28 +343,25 @@ struct image_mixer::impl
     core::mutable_frame create_frame(const void* tag, const core::pixel_format_desc& desc, std::shared_ptr<void> shared_handle)
     {
         // TODO - ensure planes is 1
+        auto shared_handle2 = std::static_pointer_cast<d3d_interop_texture>(shared_handle);
+        // TODO - this needs to happen in the background, but more predictable than inside the commit func below?
+        shared_handle2->lock_key(1234, 10);
+        auto texture = ogl_->copy_async(shared_handle2->gl_tex_id(), desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride).get();
+        shared_handle2->unlock_key(1234);
 
         std::weak_ptr<image_mixer::impl> weak_self = shared_from_this();
-        std::weak_ptr< d3d_interop_texture> weak_shared_handle = std::static_pointer_cast<d3d_interop_texture>(shared_handle);
         return core::mutable_frame(
             tag,
             std::vector<array<uint8_t>>{}, // TODO - needs one array
             array<int32_t>{},
             desc,
-            [weak_self, weak_shared_handle, desc](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
+            [weak_self, texture, desc](std::vector<array<const std::uint8_t>> image_data) -> boost::any {
             auto self = weak_self.lock();
             if (!self) {
                 return boost::any{};
             }
 
-            auto shared_handle = weak_shared_handle.lock();
-            if (!shared_handle) {
-                return boost::any{};
-            }
-
-            auto future = self->ogl_->copy_async(shared_handle->gl_tex_id(), desc.planes[0].width, desc.planes[0].height, desc.planes[0].stride);
-
-            std::vector<future_texture> textures{ future.share() };
+            std::vector<future_texture> textures{ make_ready_future(texture) };
             return std::make_shared<decltype(textures)>(std::move(textures));
         });
     }
