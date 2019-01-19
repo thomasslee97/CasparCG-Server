@@ -1,6 +1,12 @@
 jobs:
 - job: ubuntu_1804_docker
   displayName: 'Ubuntu 18.04'
+  strategy:
+    matrix:
+      Default: {}
+      Clang:
+        CC: clang
+        CXX: clang++
   pool:
     vmImage: 'ubuntu-16.04'
   steps:

@@ -23,6 +23,8 @@ FROM ${IMAGE_BASE} as build-casparcg
 	ENV BOOST_ROOT=/opt/boost
 	ENV PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig
 
+    ARG CC
+    ARG CXX
 	ARG GIT_HASH
 
 	RUN cmake /source
