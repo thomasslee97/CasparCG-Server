@@ -1,5 +1,14 @@
 C H A N G E S
 
+CasparCG 2.1.4 NRK (w.r.t 2.1.3 NRK)
+==========================================
+
+  o Add TOP and BOTTOM transition directions
+
+  o Add more OSC data from ffmpeg producer
+
+  o Reenable framerate producer for ffmpeg producer. This fixes playback of non 25p/50i clips.
+
 CasparCG 2.1.3 NRK (w.r.t 2.1.2 NRK)
 ==========================================
 
