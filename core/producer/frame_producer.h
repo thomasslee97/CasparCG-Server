@@ -39,6 +39,7 @@
 #include <vector>
 
 #include <boost/property_tree/ptree_fwd.hpp>
+#include <boost/optional.hpp>
 #include "timecode_source.h"
 
 FORWARD1(caspar, class executor);
@@ -100,6 +101,7 @@ public:
         virtual draw_frame                                                      first_frame()         = 0;
 	virtual constraints&						pixel_constraints() = 0;
 	virtual void								leading_producer(const spl::shared_ptr<frame_producer>&) {}
+    virtual boost::optional<int64_t> auto_play_delta() const { return boost::none; }
 };
 
 class frame_producer_base : public frame_producer

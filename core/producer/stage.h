@@ -69,7 +69,7 @@ class stage_base : public interaction_sink
     virtual std::future<void>            load(int                                    index,
                                               const spl::shared_ptr<frame_producer>& producer,
                                               bool                                   preview = false,
-                                              const boost::optional<int32_t>& auto_play_delta = boost::optional<int32_t>()) = 0;
+                                              bool                                   auto_play = false) = 0;
     virtual std::future<void>            pause(int index)                                                 = 0;
     virtual std::future<void>            resume(int index)                                                = 0;
     virtual std::future<void>            play(int index)                                                  = 0;
@@ -129,7 +129,7 @@ class stage : public stage_base
     std::future<void>            load(int                                    index,
                                       const spl::shared_ptr<frame_producer>& producer,
                                       bool                                   preview = false,
-                                      const boost::optional<int32_t>& auto_play_delta = boost::optional<int32_t>()) override;
+                                      bool                                   auto_play = false) override;
     std::future<void>            pause(int index) override;
     std::future<void>            resume(int index) override;
     std::future<void>            play(int index) override;
@@ -206,7 +206,7 @@ class stage_delayed final : public stage_base
     std::future<void>            load(int                                    index,
                                       const spl::shared_ptr<frame_producer>& producer,
                                       bool                                   preview = false,
-                                      const boost::optional<int32_t>& auto_play_delta = boost::optional<int32_t>()) override;
+                                      bool                                   auto_play = false) override;
     std::future<void>            pause(int index) override;
     std::future<void>            resume(int index) override;
     std::future<void>            play(int index) override;

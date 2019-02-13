@@ -40,7 +40,7 @@ struct layer::impl
 	spl::shared_ptr<monitor::subject>	monitor_subject_;
 	spl::shared_ptr<frame_producer>		foreground_			= frame_producer::empty();
 	spl::shared_ptr<frame_producer>		background_			= frame_producer::empty();;
-	boost::optional<int32_t>			auto_play_delta_;
+	bool                                auto_play_          = false;
 	bool								is_paused_			= false;
 	int64_t								current_frame_age_	= 0;
 
@@ -81,13 +81,13 @@ public:
 		is_paused_ = false;
 	}
 
-	void load(spl::shared_ptr<frame_producer> producer, bool preview, const boost::optional<int32_t>& auto_play_delta)
+	void load(spl::shared_ptr<frame_producer> producer, bool preview, bool auto_play)
 	{
 //		background_->unsubscribe(background_event_subject_);
 		background_ = std::move(producer);
 //		background_->subscribe(background_event_subject_);
 
-		auto_play_delta_ = auto_play_delta;
+		auto_play_ = auto_play;
 
 		if(preview)
 		{
@@ -97,7 +97,7 @@ public:
 			is_paused_ = true;
 		}
 
-		if(auto_play_delta_ && foreground_ == frame_producer::empty())
+		if (auto_play_ && foreground_ == frame_producer::empty())
 			play();
 	}
 
@@ -110,7 +110,7 @@ public:
 			set_foreground(background_);
 			background_ = std::move(frame_producer::empty());
 
-			auto_play_delta_.reset();
+			auto_play_ = false;
 		}
 
 		foreground_->paused(false);
@@ -121,7 +121,7 @@ public:
 	{
 		set_foreground(frame_producer::empty());
 
-		auto_play_delta_.reset();
+		auto_play_ = false;
 	}
 
         draw_frame receive_background()
@@ -153,13 +153,17 @@ public:
 			if(frame == core::draw_frame::late())
 				return foreground_->last_frame();
 
-			if(auto_play_delta_)
+			if (auto_play_)
 			{
-				auto frames_left = static_cast<int64_t>(foreground_->nb_frames()) - foreground_->frame_number() - static_cast<int64_t>(*auto_play_delta_);
-				if(frames_left < 1)
+                auto auto_play_delta = background_->auto_play_delta();
+                if (auto_play_delta)
 				{
-					play();
-					return receive(format_desc);
+					auto frames_left = static_cast<int64_t>(foreground_->nb_frames()) - foreground_->frame_number() - static_cast<int64_t>(*auto_play_delta);
+					if(frames_left < 1)
+					{
+						play();
+						return receive(format_desc);
+					}
 				}
 			}
 
@@ -185,14 +189,16 @@ public:
 
 	boost::property_tree::wptree info() const
 	{
+        auto auto_play_delta = background_->auto_play_delta();
+
 		boost::property_tree::wptree info;
-		info.add(L"auto_delta",	(auto_play_delta_ ? boost::lexical_cast<std::wstring>(*auto_play_delta_) : L"null"));
+		info.add(L"auto_delta",	(auto_play_delta ? boost::lexical_cast<std::wstring>(*auto_play_delta) : L"null"));
 		info.add(L"frame-number", foreground_->frame_number());
 
 		auto nb_frames = foreground_->nb_frames();
 
 		info.add(L"nb_frames",	 nb_frames == std::numeric_limits<int64_t>::max() ? -1 : nb_frames);
-		info.add(L"frames-left", nb_frames == std::numeric_limits<int64_t>::max() ? -1 : (foreground_->nb_frames() - foreground_->frame_number() - (auto_play_delta_ ? *auto_play_delta_ : 0)));
+		info.add(L"frames-left", nb_frames == std::numeric_limits<int64_t>::max() ? -1 : (foreground_->nb_frames() - foreground_->frame_number() - (auto_play_delta ? *auto_play_delta : 0)));
 		info.add(L"frame-age", current_frame_age_);
 		info.add_child(L"foreground.producer", foreground_->info());
 		info.add_child(L"background.producer", background_->info());
@@ -233,7 +239,7 @@ void layer::swap(layer& other)
 	impl_->update_index(other.impl_->index_);
 	other.impl_->update_index(old_index);
 }
-void layer::load(spl::shared_ptr<frame_producer> frame_producer, bool preview, const boost::optional<int32_t>& auto_play_delta){return impl_->load(std::move(frame_producer), preview, auto_play_delta);}
+void layer::load(spl::shared_ptr<frame_producer> frame_producer, bool preview, bool auto_play){return impl_->load(std::move(frame_producer), preview, auto_play);}
 void layer::play(){impl_->play();}
 void layer::pause(){impl_->pause();}
 void layer::resume(){impl_->resume();}

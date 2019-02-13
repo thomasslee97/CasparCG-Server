@@ -64,6 +64,8 @@ public:
 	{
 		source_producer_ = producer;
 	}
+
+	boost::optional<int64_t> auto_play_delta() const override { return info_.duration; }
             
         draw_frame first_frame() override { 
             return dest_producer_->first_frame(); 

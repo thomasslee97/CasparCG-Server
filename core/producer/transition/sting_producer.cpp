@@ -84,6 +84,15 @@ namespace caspar {
                 return dest_producer_->first_frame(); 
             }
 
+			boost::optional<int64_t> auto_play_delta() const override {
+				auto duration = static_cast<int64_t>(mask_producer_->nb_frames());
+				// ffmpeg will return -1 when media is still loading, so we need to cast duration first
+				if (duration > -1) {
+					return boost::optional<int64_t>(duration);
+				}
+				return boost::none;
+			}
+
             draw_frame dest_ = draw_frame::empty();
             draw_frame source_ = draw_frame::empty();
             draw_frame mask_ = draw_frame::empty();
@@ -99,72 +108,70 @@ namespace caspar {
                     return dest_producer_->receive();
                 }
 
-                tbb::parallel_invoke(
-                    [&]
-                {
-                    if (dest_ != draw_frame::empty())
-                        return;
+				if (source_ == draw_frame::empty()) {
+					source_ = source_producer_->receive();
+					if (source_ == draw_frame::empty()) {
+						source_ = source_producer_->last_frame();
+					}
+				}
 
-                    if (!is_dest_running()) {
-                        dest_ = draw_frame::empty();
-                        return;
-                    }
+				if (dest_ == draw_frame::empty() && is_dest_running()) {
+					dest_ = dest_producer_->receive();
+					if (dest_ == draw_frame::empty()) {
+						dest_ = dest_producer_->last_frame();
+					}
 
-                    dest_ = dest_producer_->receive();
-                    if (dest_ == draw_frame::late())
-                        dest_ = dest_producer_->last_frame();
-                },
-                    [&]
-                {
-                    if (source_ != draw_frame::empty())
-                        return;
+					if (dest_ == draw_frame::empty()) { // Not ready yet
+						auto res = source_;
+						source_ = draw_frame::empty() ;
+						return res;
+					}
+				}
 
-                    source_ = source_producer_->receive();
-                    if (source_ == draw_frame::late())
-                        source_ = source_producer_->last_frame();
-                },
-                    [&]
-                {
-                    if (mask_ != draw_frame::empty())
-                        return;
+				if (mask_ == draw_frame::empty()) {
+					mask_ = mask_producer_->receive();
+				}
+				bool expecting_overlay = overlay_producer_ != core::frame_producer::empty();
+				if (expecting_overlay && overlay_ == draw_frame::empty()) {
+					overlay_ = overlay_producer_->receive();
+				}
 
-                    mask_ = mask_producer_->receive();
-                    if (mask_ == draw_frame::late())
-                        mask_ = mask_producer_->last_frame();
-                },
-                    [&]
-                {
-                    if (overlay_ != draw_frame::empty())
-                        return;
+				// Not started, and mask or overlay is not ready
+				bool mask_and_overlay_valid = mask_ != draw_frame::empty() && (!expecting_overlay || overlay_ != draw_frame::empty());
+				if (current_frame_ == 0 && !mask_and_overlay_valid) {
+					auto res = source_;
+					source_ = draw_frame::empty();
+					return res;
+				}
 
-                    overlay_ = overlay_producer_->receive();
-                    if (overlay_ == draw_frame::late())
-                        overlay_ = overlay_producer_->last_frame();
-                });
+				// Ensure mask and overlay are in perfect sync
+				auto mask = mask_;
+				auto overlay = overlay_;
+				if (!mask_and_overlay_valid) {
+					// If one is behind, then fetch the last_frame of both
+					mask = mask_producer_->last_frame();
+					overlay = overlay_producer_->last_frame();
+				}
 
-                if (dest_ == draw_frame::empty() || mask_ == draw_frame::empty() || (overlay_producer_ != frame_producer::empty() && overlay_ == draw_frame::empty())) {
-                    if (current_frame_ == 0) {
-                        auto res = source_;
-                        source_ = draw_frame::empty();
-                        return res;
-                    }
+				auto res = compose(dest_, source_, mask, overlay);
 
-                    return last_frame();
-                }
+				dest_ = draw_frame::empty();
+				source_ = draw_frame::empty();
 
-                current_frame_ += 1;
+				if (mask_and_overlay_valid) {
+					mask_ = draw_frame::empty();
+					overlay_ = draw_frame::empty();
 
-                // TODO include info on the mask and overlay producers
-                *monitor_subject_ << monitor::message("/transition/frame") % static_cast<int>(current_frame_) % static_cast<int>(info_.duration);
+					current_frame_ += 1;
+				}
 
-                const auto res = compose(dest_, source_, mask_, overlay_);
+				// TODO include info on the mask and overlay producers
+				auto duration = auto_play_delta();
+				if (duration) {
+					*monitor_subject_ << monitor::message("/transition/frame") % static_cast<int>(current_frame_) % static_cast<int>(*duration);
+				}
 
-                source_ = draw_frame::empty();
-                dest_ = draw_frame::empty();
-                mask_ = draw_frame::empty();
-                overlay_ = draw_frame::empty();
-
-                return res;
+				return res;
             }
 
             const spl::shared_ptr<frame_producer>& primary_producer() const
@@ -174,7 +181,8 @@ namespace caspar {
 
             bool has_finished() const 
             {
-                return current_frame_ >= info_.duration;
+				auto duration = auto_play_delta();
+                return duration && current_frame_ >= *duration;
             }
 
             draw_frame last_frame() override
@@ -212,7 +220,19 @@ namespace caspar {
 
             boost::property_tree::wptree info() const override
             {
-                return primary_producer()->info();
+				auto duration = auto_play_delta();
+
+                boost::property_tree::wptree trans_info;
+                trans_info.add(L"type", "sting");
+                trans_info.add(L"frame", current_frame_);
+                trans_info.add(L"duration", duration ? *duration : -1);
+                trans_info.add(L"mask_filename", info_.mask_filename);
+                trans_info.add(L"overlay_filename", info_.overlay_filename);
+                trans_info.add(L"trigger_point", info_.trigger_point);
+
+                auto info = primary_producer()->info();
+				info.add_child(L"transition", trans_info);
+                return info;
             }
 
             std::future<std::wstring> call(const std::vector<std::wstring>& params) override
@@ -224,7 +244,8 @@ namespace caspar {
 
             draw_frame compose(draw_frame dest_frame, draw_frame src_frame, draw_frame mask_frame, draw_frame overlay_frame) const
             {
-                const double delta2 = audio_tweener_(current_frame_, 0.0, 1.0, static_cast<double>(info_.duration));
+				auto duration = auto_play_delta();
+                const double delta2 = duration ? audio_tweener_(current_frame_, 0.0, 1.0, static_cast<double>(*duration)) : 0;
 
                 src_frame.transform().audio_transform.volume = 1.0 - delta2;
                 dest_frame.transform().audio_transform.volume = delta2;
@@ -247,7 +268,7 @@ namespace caspar {
                 return draw_frame(std::move(frames));
             }
 
-            monitor::subject& monitor_output()
+            monitor::subject& monitor_output() override
             {
                 return *monitor_subject_;
             }
@@ -274,7 +295,6 @@ namespace caspar {
         {
             // Any producer which exposes a fixed duration will work here, not just ffmpeg
             auto mask_producer = dependencies.producer_registry->create_producer(dependencies, info.mask_filename);
-            info.duration = mask_producer->nb_frames();
             
             auto overlay_producer = frame_producer::empty();
             if (info.overlay_filename != L"") {

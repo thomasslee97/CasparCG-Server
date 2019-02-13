@@ -32,7 +32,6 @@
 #include <common/memory.h>
 
 #include <boost/property_tree/ptree_fwd.hpp>
-#include <boost/optional.hpp>
 
 #include <string>
 
@@ -56,7 +55,7 @@ public:
 
 	void swap(layer& other);  
 		
-	void load(spl::shared_ptr<frame_producer> producer, bool preview, const boost::optional<int32_t>& auto_play_delta = boost::optional<int32_t>());
+	void load(spl::shared_ptr<frame_producer> producer, bool preview, bool auto_play = false);
 	void play();
 	void pause();
 	void resume();

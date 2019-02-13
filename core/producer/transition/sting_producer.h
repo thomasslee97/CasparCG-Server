@@ -37,9 +37,6 @@ namespace caspar {
             std::wstring mask_filename = L"";
             std::wstring overlay_filename = L"";
             uint32_t trigger_point = 0;
-
-            // out parameter
-            uint32_t duration = 0;
         };
 
         spl::shared_ptr<frame_producer> create_sting_producer(const frame_producer_dependencies& dependencies,
