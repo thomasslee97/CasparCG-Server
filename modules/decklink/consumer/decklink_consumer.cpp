@@ -580,12 +580,28 @@ struct decklink_consumer
                         0.5);
 
             if (result == bmdOutputFrameDisplayedLate) {
+                std::wstring str = print() + L" late scheduled=" + boost::lexical_cast<std::wstring>(video_scheduled_) + L"*";
+                long long timestamp = 0;
+                double speed = 0;
+                if (SUCCEEDED(output_->GetScheduledStreamTime(format_desc_.time_scale, &timestamp, &speed))) {
+                    str += L" decklink=" + boost::lexical_cast<std::wstring>(timestamp);
+                }
+                CASPAR_LOG(warning) << str;
+
                 graph_->set_tag(diagnostics::tag_severity::WARNING, "late-frame");
                 video_scheduled_ += format_desc_.duration;
                 audio_scheduled_ += dframe->audio_data().size() / in_channel_layout_.num_channels;
-            } else if (result == bmdOutputFrameDropped)
+            } else if (result == bmdOutputFrameDropped) {
+                std::wstring str = print() + L" dropped scheduled=" + boost::lexical_cast<std::wstring>(video_scheduled_) + L"*";
+                long long timestamp = 0;
+                double speed = 0;
+                if (SUCCEEDED(output_->GetScheduledStreamTime(format_desc_.time_scale, &timestamp, &speed))) {
+                    str += L" decklink=" + boost::lexical_cast<std::wstring>(timestamp);
+                }
+                CASPAR_LOG(warning) << str;
+
                 graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
-            else if (result == bmdOutputFrameFlushed)
+            } else if (result == bmdOutputFrameFlushed)
                 graph_->set_tag(diagnostics::tag_severity::WARNING, "flushed-frame");
 
             UINT32 buffered;
