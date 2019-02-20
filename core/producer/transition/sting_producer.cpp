@@ -108,37 +108,44 @@ namespace caspar {
                     return dest_producer_->receive();
                 }
 
-				if (source_ == draw_frame::empty()) {
-					source_ = source_producer_->receive();
-					if (source_ == draw_frame::empty()) {
-						source_ = source_producer_->last_frame();
-					}
-				}
-
-				if (dest_ == draw_frame::empty() && is_dest_running()) {
-					dest_ = dest_producer_->receive();
-					if (dest_ == draw_frame::empty()) {
-						dest_ = dest_producer_->last_frame();
-					}
-
-					if (dest_ == draw_frame::empty()) { // Not ready yet
-						auto res = source_;
-						source_ = draw_frame::empty() ;
-						return res;
-					}
-				}
-
-				if (mask_ == draw_frame::empty()) {
-					mask_ = mask_producer_->receive();
-				}
+				bool dest_running = is_dest_running();
 				bool expecting_overlay = overlay_producer_ != core::frame_producer::empty();
-				if (expecting_overlay && overlay_ == draw_frame::empty()) {
-					overlay_ = overlay_producer_->receive();
+				tbb::parallel_invoke(
+					[&]
+				{
+					if (source_ == draw_frame::empty()) {
+						source_ = source_producer_->receive();
+						if (source_ == draw_frame::empty()) {
+							source_ = source_producer_->last_frame();
+						}
+					}
+				},
+					[&]
+				{
+					if (dest_ == draw_frame::empty()) {
+						dest_ = dest_producer_->receive();
+						if (dest_ == draw_frame::empty()) {
+							dest_ = dest_producer_->last_frame();
+						}
+					}
+				},
+					[&]
+				{
+					if (mask_ == draw_frame::empty()) {
+						mask_ = mask_producer_->receive();
+					}
+				},
+					[&]
+				{
+					if (expecting_overlay && overlay_ == draw_frame::empty()) {
+						overlay_ = overlay_producer_->receive();
+					}
 				}
+				);
 
 				// Not started, and mask or overlay is not ready
 				bool mask_and_overlay_valid = mask_ != draw_frame::empty() && (!expecting_overlay || overlay_ != draw_frame::empty());
-				if (current_frame_ == 0 && !mask_and_overlay_valid) {
+				if (dest_ == draw_frame::empty() || (current_frame_ == 0 && !mask_and_overlay_valid)) { // Not ready yet
 					auto res = source_;
 					source_ = draw_frame::empty();
 					return res;
@@ -153,9 +160,11 @@ namespace caspar {
 					overlay = overlay_producer_->last_frame();
 				}
 
-				auto res = compose(dest_, source_, mask, overlay);
+				auto res = compose(dest_running ? dest_ : draw_frame::empty(), source_, mask, overlay);
 
-				dest_ = draw_frame::empty();
+				if (dest_running) {
+					dest_ = draw_frame::empty();
+				}
 				source_ = draw_frame::empty();
 
 				if (mask_and_overlay_valid) {
