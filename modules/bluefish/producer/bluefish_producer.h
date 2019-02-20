@@ -17,25 +17,20 @@
  * along with CasparCG. If not, see <http://www.gnu.org/licenses/>.
  *
  * Author: Robert Nagy, ronag89@gmail.com
- *         James Wise,  james.wise@bluefish444.com
+ *		  satchit puthenveetil
+ *         James Wise, james.wise@bluefish444.com
  */
 
 #pragma once
 
-#include <boost/property_tree/ptree_fwd.hpp>
-#include <common/memory.h>
 #include <core/fwd.h>
+
 #include <string>
 #include <vector>
 
 namespace caspar { namespace bluefish {
 
-spl::shared_ptr<core::frame_consumer> create_consumer(const std::vector<std::wstring>& params, core::interaction_sink*,
-	std::vector<spl::shared_ptr<core::video_channel>> channels,
-	spl::shared_ptr<core::consumer_delayed_responder>);
-
-spl::shared_ptr<core::frame_consumer>
-create_preconfigured_consumer(const boost::property_tree::wptree& ptree, core::interaction_sink*,
-	std::vector<spl::shared_ptr<core::video_channel>> channels);
+spl::shared_ptr<core::frame_producer> create_producer(const core::frame_producer_dependencies& dependencies,
+                                                      const std::vector<std::wstring>&         params);
 
 }} // namespace caspar::bluefish
