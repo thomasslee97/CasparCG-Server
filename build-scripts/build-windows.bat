@@ -9,8 +9,8 @@ if not defined BUILD_7ZIP exit /b 1
 :: Clean and enter shadow build folder
 echo Cleaning...
 cd .. || goto :error
-if exist build rmdir build /s /q || goto :error
-mkdir build || goto :error
+if exist build2 rmdir build2 /s /q || goto :error
+mkdir build2 || goto :error
 
 :: Unpack archived dependencies
 echo Unpacking archived dependencies...
@@ -21,7 +21,7 @@ echo Setting up VC++...
 call "%BUILD_VCVARSALL%" amd64 || goto :error
 
 :: Run cmake
-cd build || goto :error
+cd build2 || goto :error
 cmake -G "Visual Studio 14 2015" -A x64 .. || goto :error
 
 :: Build with MSBuild

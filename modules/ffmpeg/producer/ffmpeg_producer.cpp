@@ -250,16 +250,6 @@ public:
 		return render_frame().first;
 	}
 
-        core::draw_frame first_frame() override
-        {
-            boost::unique_lock<boost::mutex> buffer_lock(buffer_mutex_);
-            if (frame_buffer_.empty()) {
-                return core::draw_frame::empty();
-            }
-
-            return core::draw_frame::still(frame_buffer_.front().first);
-        }
-
 	core::draw_frame last_frame() override
 	{
             if (last_frame_ == core::draw_frame::empty())
