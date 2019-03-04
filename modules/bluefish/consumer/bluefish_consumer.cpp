@@ -196,6 +196,7 @@ struct bluefish_consumer
         graph_->set_color("flushed-frame", diagnostics::color(0.4f, 0.3f, 0.8f));
         graph_->set_color("buffered-audio", diagnostics::color(0.9f, 0.9f, 0.5f));
         graph_->set_color("buffered-video", diagnostics::color(0.2f, 0.9f, 0.9f));
+		graph_->set_color("sync-time", diagnostics::color(0.6f, 0.5f, 0.9f));
 
         graph_->set_text(print());
         diagnostics::register_graph(graph_);
@@ -697,10 +698,8 @@ struct bluefish_consumer
         }
 
         // Sync
-        unsigned long n_field = 0;
-        blue_->wait_video_output_sync(UPD_FMT_FRAME, n_field);
-        graph_->set_value("sync-time", sync_timer_.elapsed() * format_desc_.fps * 0.5);
-        sync_timer_.restart();
+        //unsigned long n_field = 0;
+        //blue_->wait_video_output_sync(UPD_FMT_FRAME, n_field);
     }
 
     void encode_hanc(BLUE_UINT32* hanc_data, void* audio_data, int audio_samples, int audio_nchannels)
@@ -792,7 +791,7 @@ struct bluefish_consumer_proxy final : public core::frame_consumer
 
     int index() const override { return 400 + config_.device_index; }
 
-    bool has_synchronization_clock() const override { return true; }
+    bool has_synchronization_clock() const override { return false; }
 
 	int buffer_depth() const override { return -1; } // TODO??
 
