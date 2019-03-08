@@ -38,7 +38,6 @@
 #include <common/assert.h>
 #include <common/env.h>
 #include <common/executor.h>
-#include <common/lock.h>
 #include <common/future.h>
 #include <common/diagnostics/graph.h>
 #include <common/prec_timer.h>
@@ -90,11 +89,11 @@ class html_client
 	tbb::atomic<bool>						loaded_;
 	tbb::atomic<bool>						removed_;
 	std::queue<core::draw_frame>			frames_;
-	mutable boost::mutex					frames_mutex_;
+	mutable std::mutex						frames_mutex_;
 
 	core::draw_frame						last_frame_;
 	core::draw_frame						last_progressive_frame_;
-	mutable boost::mutex					last_frame_mutex_;
+	mutable std::mutex						last_frame_mutex_;
 
 	CefRefPtr<CefBrowser>					browser_;
 
@@ -134,10 +133,8 @@ public:
 
 	core::draw_frame last_frame() const
 	{
-		return lock(last_frame_mutex_, [&]
-		{
-			return last_frame_;
-		});
+		std::lock_guard<std::mutex> lock(last_frame_mutex_);
+		return last_frame_;
 	}
 
 	void execute_javascript(const std::wstring& javascript)
@@ -234,8 +231,8 @@ private:
 		auto frame = frame_factory_->create_frame(this, pixel_desc, core::audio_channel_layout::invalid());
 		std::memcpy(frame.image_data().begin(), buffer, width * height * 4);
 
-		lock(frames_mutex_, [&]
 		{
+            std::lock_guard<std::mutex> lock(frames_mutex_);
 			frames_.push(core::draw_frame(std::move(frame)));
 
 			size_t max_in_queue = format_desc_.field_count + 1;
@@ -245,7 +242,7 @@ private:
 				frames_.pop();
 				graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
 			}
-		});
+		}
 	}
 
 	void OnAfterCreated(CefRefPtr<CefBrowser> browser) override
@@ -349,8 +346,9 @@ private:
 
 	bool try_pop(core::draw_frame& result)
 	{
-		return lock(frames_mutex_, [&]() -> bool
 		{
+            std::lock_guard<std::mutex> lock(frames_mutex_);
+
 			if (!frames_.empty())
 			{
 				result = std::move(frames_.front());
@@ -360,85 +358,50 @@ private:
 			}
 
 			return false;
-		});
-	}
-
-	core::draw_frame pop()
-	{
-		core::draw_frame frame;
-
-		if (!try_pop(frame))
-		{
-			CASPAR_THROW_EXCEPTION(caspar_exception() << msg_info(u8(print()) + " No frame in buffer"));
 		}
-
-		return frame;
 	}
 
 	void update()
 	{
 		invoke_requested_animation_frames();
 
-		prec_timer timer;
-		timer.tick(0.0);
-
-		auto num_frames = lock(frames_mutex_, [&]
-		{
-			return frames_.size();
-		});
-
-		if (num_frames >= format_desc_.field_count)
-		{
-			if (format_desc_.field_mode != core::field_mode::progressive)
-			{
-				auto frame1 = pop();
-
-				executor_.yield(caspar::task_priority::lowest_priority);
-				timer.tick(1.0 / (format_desc_.fps * format_desc_.field_count));
-				invoke_requested_animation_frames();
-
-				auto frame2 = pop();
-
-				lock(last_frame_mutex_, [&]
-				{
-					last_progressive_frame_ = frame2;
-					last_frame_ = core::draw_frame::interlace(frame1, frame2, format_desc_.field_mode);
-				});
-			}
-			else
-			{
-				auto frame = pop();
-
-				lock(last_frame_mutex_, [&]
-				{
-					last_frame_ = frame;
-				});
-			}
+		const bool is_interlaced = format_desc_.field_mode != core::field_mode::progressive;
+        if (is_interlaced) {
+			prec_timer timer;
+			timer.tick(0.0); // First tick just sets the current time
+            timer.tick(1.0 / (format_desc_.fps * format_desc_.field_count));
+            invoke_requested_animation_frames();
 		}
-		else if (num_frames == 1) // Interlaced but only one frame
-		{                         // available. Probably the last frame
-		                          // of some animation sequence.
-			auto frame = pop();
 
-			lock(last_frame_mutex_, [&]
-			{
-				last_progressive_frame_ = frame;
-				last_frame_ = frame;
-			});
-
-			timer.tick(1.0 / (format_desc_.fps * format_desc_.field_count));
-			invoke_requested_animation_frames();
-			graph_->set_tag(diagnostics::tag_severity::SILENT, "browser-dropped-frame");
-		}
-		else
-		{
-			if (format_desc_.field_mode != core::field_mode::progressive)
-				lock(last_frame_mutex_, [&]
-				{
-					last_frame_ = last_progressive_frame_;
-				});
+		core::draw_frame frame1;
+		if (!try_pop(frame1)) {
+			if (is_interlaced) {
+				std::lock_guard<std::mutex> lock(last_frame_mutex_);
+				last_frame_ = last_progressive_frame_;
+			}
 
 			graph_->set_tag(diagnostics::tag_severity::SILENT, "browser-dropped-frame");
+			return;
+		}
+
+		if (is_interlaced) {
+			core::draw_frame frame2;
+			if (!try_pop(frame2)) {
+				{
+					std::lock_guard<std::mutex> lock(last_frame_mutex_);
+					last_progressive_frame_ = frame1;
+					last_frame_ = frame1;
+				}
+
+				graph_->set_tag(diagnostics::tag_severity::SILENT, "browser-dropped-frame");
+			} else {
+				std::lock_guard<std::mutex> lock(last_frame_mutex_);
+				last_progressive_frame_ = frame1;
+				last_frame_ = core::draw_frame::interlace(frame1, frame2, format_desc_.field_mode);
+			}
+		} else {
+			std::lock_guard<std::mutex> lock(last_frame_mutex_);
+			last_frame_ = frame1;
 		}
 	}
 
