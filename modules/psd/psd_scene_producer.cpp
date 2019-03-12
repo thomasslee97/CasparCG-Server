@@ -351,6 +351,53 @@ void create_timelines(
 					scene->add_keyframe(opacity, opct, boost::rational_cast<int64_t>(frame));
 			}
 		}
+		else if (track_id == L"vectorMaskPositionTrack")
+		{
+			// This assumes that the dimensions of the mask will never change, as that doesn't appear to be tweenable?
+			// TODO - verify this is true
+
+			auto& crop = layer.crop;
+			auto width = crop.lower_right.x.get() - crop.upper_left.x.get();
+			auto height = crop.lower_right.y.get() - crop.upper_left.y.get();
+
+			for (auto& key : track.second.get_child(L"keyList"))
+			{
+				bool tween = key.second.get<std::wstring>(L"animInterpStyle") == L"Lnr ";
+				auto raw_x = key.second.get<double>(L"animKey.Hrzn");
+				auto raw_y = key.second.get<double>(L"animKey.Vrtc");
+				auto time = get_rational(key.second.get_child(L"time"));
+				auto frame = get_frame_number(format_desc, time);
+
+				auto left = raw_x - layer.position.x.get();
+				auto right = left + width;
+				auto top = raw_y - layer.position.y.get();
+				auto bottom = top + height;
+				
+				if (frame == 0) { // Consider as initial value (rewind)
+					crop.upper_left.x.set(left);
+					crop.upper_left.y.set(top);
+					crop.lower_right.x.set(right);
+					crop.lower_right.y.set(bottom);
+				}
+
+				// TODO - this looks very wrong with text. Looks OK with color, but it could be off still..
+
+				if (tween)
+				{
+					scene->add_keyframe(crop.upper_left.x, left, boost::rational_cast<int64_t>(frame), L"linear");
+					scene->add_keyframe(crop.upper_left.y, top, boost::rational_cast<int64_t>(frame), L"linear");
+					scene->add_keyframe(crop.lower_right.x, right, boost::rational_cast<int64_t>(frame), L"linear");
+					scene->add_keyframe(crop.lower_right.y, bottom, boost::rational_cast<int64_t>(frame), L"linear");
+				} 
+				else
+				{
+					scene->add_keyframe(crop.upper_left.x, left, boost::rational_cast<int64_t>(frame));
+					scene->add_keyframe(crop.upper_left.y, top, boost::rational_cast<int64_t>(frame));
+					scene->add_keyframe(crop.lower_right.x, right, boost::rational_cast<int64_t>(frame));
+					scene->add_keyframe(crop.lower_right.y, bottom, boost::rational_cast<int64_t>(frame));
+				}
+			}
+		}
 		else
 		{
 			//ignore other kinds of tracks for now
@@ -581,6 +628,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 						scene_layer->crop.lower_right.y.unbind();
 						scene_layer->crop.lower_right.y.set(bottom);
 					}
+					// TODO - if vector mask is not a rectangle, then follow that shape?
 				}
 
 				if (psd_layer->has_timeline())

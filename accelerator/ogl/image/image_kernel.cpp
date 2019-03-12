@@ -181,18 +181,19 @@ struct image_kernel::impl
 
 		auto do_crop = [&](core::frame_geometry::coord& coord)
 		{
-			if (!is_default_geometry)
-				// TODO implement support for non-default geometry.
-				return;
+			if (is_default_geometry) {
+				coord.vertex_x = std::max(coord.vertex_x, crop.ul[0]);
+				coord.vertex_x = std::min(coord.vertex_x, crop.lr[0]);
+				coord.vertex_y = std::max(coord.vertex_y, crop.ul[1]);
+				coord.vertex_y = std::min(coord.vertex_y, crop.lr[1]);
+				coord.texture_x = std::max(coord.texture_x, crop.ul[0]);
+				coord.texture_x = std::min(coord.texture_x, crop.lr[0]);
+				coord.texture_y = std::max(coord.texture_y, crop.ul[1]);
+				coord.texture_y = std::min(coord.texture_y, crop.lr[1]);
+			} else {
+				// TODO refactor
 
-			coord.vertex_x = std::max(coord.vertex_x, crop.ul[0]);
-			coord.vertex_x = std::min(coord.vertex_x, crop.lr[0]);
-			coord.vertex_y = std::max(coord.vertex_y, crop.ul[1]);
-			coord.vertex_y = std::min(coord.vertex_y, crop.lr[1]);
-			coord.texture_x = std::max(coord.texture_x, crop.ul[0]);
-			coord.texture_x = std::min(coord.texture_x, crop.lr[0]);
-			coord.texture_y = std::max(coord.texture_y, crop.ul[1]);
-			coord.texture_y = std::min(coord.texture_y, crop.lr[1]);
+			}
 		};
 		auto do_perspective = [=](core::frame_geometry::coord& coord, const boost::array<double, 2>& pers_corner)
 		{
@@ -216,6 +217,104 @@ struct image_kernel::impl
 			coord.vertex_x += f_p[0];
 			coord.vertex_y += f_p[1];
 		};
+
+		// TODO - refactor to fit with the other mods better..
+		if (!is_default_geometry) {
+			// TODO - starting with y only.
+			// TODO - assuming that u is above l
+			// TODO - handle non quadrilaterals vertices
+
+			// start CROP
+
+			// TODO - check if there is any crop first
+
+			// TODO - for now assuming that geometry is kept as right way up rectangles
+
+			auto top = crop.ul[1] - 1;
+			auto bot = crop.lr[1] - 1;
+			auto left = crop.ul[0];
+			auto right = crop.lr[0];
+			// if crop lines are flipped, then drop
+			if (top > bot || right < left)
+				return;
+
+			// For each quad
+			for (auto i = 0; i < coords.size(); i += 4) {
+
+				auto do_crop_y = [&](core::frame_geometry::coord& c1, core::frame_geometry::coord& c2, double y)
+				{
+					auto y_range = c1.vertex_y - c2.vertex_y;
+					auto tex_range = c1.texture_y - c2.texture_y;
+
+					auto y_range_after = y - c2.vertex_y;
+					auto y_delta = y_range_after / y_range;
+					auto new_tex_y = tex_range * y_delta;
+
+					c1.vertex_y = y;
+					c1.texture_y = new_tex_y + c2.texture_y;
+				};
+				auto do_crop_x = [&](core::frame_geometry::coord& c1, core::frame_geometry::coord& c2, double x)
+				{
+					auto x_range = c1.vertex_x - c2.vertex_x;
+					auto tex_range = c1.texture_x - c2.texture_x;
+
+					auto x_range_after = x - c2.vertex_x;
+					auto x_delta = x_range_after / x_range;
+					auto new_tex_x = tex_range * x_delta;
+
+					c1.vertex_x = x;
+					c1.texture_x = new_tex_x + c2.texture_x;
+				};
+
+				// TODO - text is vertical aligned a little weird...
+
+				// TOP
+				if (coords[i].vertex_y < top) {
+					do_crop_y(coords[i], coords[i + 3], top);
+				}
+				if (coords[i + 1].vertex_y < top) {
+					do_crop_y(coords[i + 1], coords[i + 2], top);
+				}
+
+				// BOTTOM
+				if (coords[i + 3].vertex_y > bot) {
+					do_crop_y(coords[i + 3], coords[i], bot);
+				}
+				if (coords[i + 2].vertex_y > bot) {
+					do_crop_y(coords[i + 2], coords[i + 1], bot);
+				}
+
+				// LEFT
+				if (coords[i].vertex_x < left) {
+					do_crop_x(coords[i], coords[i + 1], left);
+				}
+				if (coords[i + 3].vertex_x < left) {
+					do_crop_x(coords[i + 3], coords[i + 2], left);
+				}
+
+				// RIGHT
+				if (coords[i + 1].vertex_x > right) {
+					do_crop_x(coords[i + 1], coords[i], right);
+				}
+				if (coords[i + 2].vertex_x > right) {
+					do_crop_x(coords[i + 2], coords[i + 3], right);
+				}
+
+				// if char is flipped because of crop, then drop. assumes a lot about the shape
+				if (coords[i].vertex_y > coords[i + 3].vertex_y || coords[i].vertex_x > coords[i + 1].vertex_x) {
+					coords[i] = core::frame_geometry::coord{};
+					coords[i + 1] = core::frame_geometry::coord{};
+					coords[i + 2] = core::frame_geometry::coord{};
+					coords[i + 3] = core::frame_geometry::coord{};
+					continue;
+				}
+
+			}
+
+
+
+			// end CROP
+		}
 
 		int corner = 0;
 		for (auto& coord : coords)
