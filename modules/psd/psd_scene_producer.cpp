@@ -535,8 +535,24 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 						});*/
 
 					}
-					else
-						hotswap->producer().set(dependencies.producer_registry->create_producer(dependencies, layer_name));
+					else {
+						auto producer = [&]
+						{
+							CASPAR_SCOPED_CONTEXT_MSG(" -> ");
+							auto adjusted_dependencies = dependencies;
+							auto& adjusted_format_desc = adjusted_dependencies.format_desc;
+
+							adjusted_format_desc.field_mode = core::field_mode::progressive;
+							adjusted_format_desc.fps *= adjusted_format_desc.field_count;
+							adjusted_format_desc.time_scale *= adjusted_format_desc.field_count;
+							adjusted_format_desc.framerate *= adjusted_format_desc.field_count;
+							adjusted_format_desc.field_count = 1;
+							adjusted_format_desc.audio_cadence = core::find_audio_cadence(adjusted_format_desc.framerate);
+
+							return dependencies.producer_registry->create_producer(adjusted_dependencies, layer_name);
+						}();
+						hotswap->producer().set(producer);
+					}
 
 					layer_producer = hotswap;
 				}
