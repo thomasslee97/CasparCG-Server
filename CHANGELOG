@@ -1,5 +1,24 @@
 C H A N G E S
 
+CasparCG 2.1.5 NRK (w.r.t 2.1.4 NRK)
+==========================================
+
+  o Fix race condition in html producer when running interlaced
+
+  o Write html logs to caspar log
+  
+  o Set ffmpeg producer name in diag before playback starts
+  
+  o Add some debug logging to decklink consumer to give more info on dropped/late frames
+  
+  o Fix sting producer not determining length
+  
+  o Fix sting producer to run better when a producer falls behind
+
+  o Fix LOAD of clip not showing first frame
+  
+  o Don't use tbb thread pool in ffmpeg producer, in an attempt to reduce all channels freezing when server is under heavy load
+
 CasparCG 2.1.4 NRK (w.r.t 2.1.3 NRK)
 ==========================================
 
