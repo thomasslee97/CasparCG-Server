@@ -525,7 +525,9 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			{
 				if (psd_layer->is_placeholder())
 				{
-					auto hotswap = std::make_shared<core::hotswap_producer>(psd_layer->bitmap()->width(), psd_layer->bitmap()->height());
+					auto width = psd_layer->bitmap() ? psd_layer->bitmap()->width() : doc.width();
+					auto height = psd_layer->bitmap() ? psd_layer->bitmap()->height() : doc.height();
+					auto hotswap = std::make_shared<core::hotswap_producer>(width, height);
 
 					if (psd_layer->is_explicit_dynamic())
 					{
@@ -558,7 +560,9 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 				}
 				else if(psd_layer->is_solid())
 				{
-					layer_producer = core::create_const_producer(core::create_color_frame(it->get(), dependencies.frame_factory, psd_layer->solid_color().to_uint32()), psd_layer->bitmap()->width(), psd_layer->bitmap()->height());
+					auto width = psd_layer->bitmap() ? psd_layer->bitmap()->width() : doc.width();
+					auto height = psd_layer->bitmap() ? psd_layer->bitmap()->height() : doc.height();
+					layer_producer = core::create_const_producer(core::create_color_frame(it->get(), dependencies.frame_factory, psd_layer->solid_color().to_uint32()), width, height);
 				}
 				else if(psd_layer->bitmap())
 				{
@@ -664,7 +668,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 	// Reset all dynamic text fields to empty strings and expose them as a scene parameter.
 	for (auto& text_layer : text_producers_by_layer_name) {
 		text_layer.second->text().set(L"");
-		auto var = root->create_variable<std::wstring>(boost::to_lower_copy(text_layer.first), true, L"");
+		auto var = root->create_variable<std::wstring>(text_layer.first, true, L"");
 		text_layer.second->text().bind(var);
 	}
 
