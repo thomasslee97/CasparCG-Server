@@ -358,12 +358,12 @@ public:
 				CASPAR_THROW_EXCEPTION(user_error() << msg_info("The type in a parameter specification must be either string or number"));
 		}
 
+		proxy_->add(0, template_name_, autoplay, L"", template_data_xml_.get());
+
 		template_data_change_subscription_ = template_data_xml_.on_change([=]
 		{
 			proxy_->update(0, template_data_xml_.get());
 		});
-
-		proxy_->add(0, template_name_, autoplay, L"", template_data_xml_.get());
 	}
 
 	// frame_producer
