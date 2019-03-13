@@ -271,7 +271,8 @@ void create_timelines(
 		const spl::shared_ptr<core::scene::scene_producer>& scene,
 		const core::video_format_desc& format_desc,
 		core::scene::layer& layer,
-		const layer_ptr& psd_layer)
+		const layer_ptr& psd_layer,
+		const std::wstring& variable_prefix)
 {
 	auto timeline		= psd_layer->timeline_data();
 	auto start			= get_rational(timeline.get_child(L"timeScope.Strt"));
@@ -353,48 +354,33 @@ void create_timelines(
 		}
 		else if (track_id == L"vectorMaskPositionTrack")
 		{
-			// This assumes that the dimensions of the mask will never change, as that doesn't appear to be tweenable?
-			// TODO - verify this is true
-
-			auto& crop = layer.crop;
-			auto width = crop.lower_right.x.get() - crop.upper_left.x.get();
-			auto height = crop.lower_right.y.get() - crop.upper_left.y.get();
-
+			bool is_first = true;
 			for (auto& key : track.second.get_child(L"keyList"))
 			{
 				bool tween = key.second.get<std::wstring>(L"animInterpStyle") == L"Lnr ";
-				auto raw_x = key.second.get<double>(L"animKey.Hrzn");
-				auto raw_y = key.second.get<double>(L"animKey.Vrtc");
+				auto left = key.second.get<double>(L"animKey.Hrzn");
+				auto top = key.second.get<double>(L"animKey.Vrtc");
 				auto time = get_rational(key.second.get_child(L"time"));
 				auto frame = get_frame_number(format_desc, time);
 
-				auto left = raw_x - layer.position.x.get();
-				auto right = left + width;
-				auto top = raw_y - layer.position.y.get();
-				auto bottom = top + height;
-				
-				if (frame == 0) { // Consider as initial value (rewind)
-					crop.upper_left.x.set(left);
-					crop.upper_left.y.set(top);
-					crop.lower_right.x.set(right);
-					crop.lower_right.y.set(bottom);
-				}
+				auto vector_mask_x = scene->get_variable(variable_prefix + L"vector_mask_x").as<double>();
+				auto vector_mask_y = scene->get_variable(variable_prefix + L"vector_mask_y").as<double>();
 
-				// TODO - this looks very wrong with text. Looks OK with color, but it could be off still..
+				if (is_first) { // Consider as initial value (rewind)
+					is_first = false;
+					vector_mask_x.set(left);
+					vector_mask_y.set(top);
+				}
 
 				if (tween)
 				{
-					scene->add_keyframe(crop.upper_left.x, left, boost::rational_cast<int64_t>(frame), L"linear");
-					scene->add_keyframe(crop.upper_left.y, top, boost::rational_cast<int64_t>(frame), L"linear");
-					scene->add_keyframe(crop.lower_right.x, right, boost::rational_cast<int64_t>(frame), L"linear");
-					scene->add_keyframe(crop.lower_right.y, bottom, boost::rational_cast<int64_t>(frame), L"linear");
+					scene->add_keyframe(vector_mask_x, left, boost::rational_cast<int64_t>(frame), L"linear");
+					scene->add_keyframe(vector_mask_y, top, boost::rational_cast<int64_t>(frame), L"linear");
 				} 
 				else
 				{
-					scene->add_keyframe(crop.upper_left.x, left, boost::rational_cast<int64_t>(frame));
-					scene->add_keyframe(crop.upper_left.y, top, boost::rational_cast<int64_t>(frame));
-					scene->add_keyframe(crop.lower_right.x, right, boost::rational_cast<int64_t>(frame));
-					scene->add_keyframe(crop.lower_right.y, bottom, boost::rational_cast<int64_t>(frame));
+					scene->add_keyframe(vector_mask_x, left, boost::rational_cast<int64_t>(frame));
+					scene->add_keyframe(vector_mask_y, top, boost::rational_cast<int64_t>(frame));
 				}
 			}
 		}
@@ -450,7 +436,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			scene_layer.hidden.set(!psd_layer->is_visible());
 
 			if (psd_layer->has_timeline())
-				create_timelines(root, dependencies.format_desc, scene_layer, psd_layer);
+				create_timelines(root, dependencies.format_desc, scene_layer, psd_layer, L"TODO");
 
 			if (psd_layer->is_movable())
 				current.add(&scene_layer, psd_layer->tags(), false);
@@ -484,6 +470,12 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			std::shared_ptr<core::frame_producer> layer_producer;
 			auto layer_name = psd_layer->name();
 
+			auto variable_prefix = L"layer." + layer_name + L".";
+
+			auto crop_x_offset = root->create_variable<double>(variable_prefix + L"crop_x_offset", false);
+			auto layer_x = static_cast<double>(psd_layer->location().x);
+			auto layer_y = static_cast<double>(psd_layer->location().y);
+
 			if(psd_layer->is_text() && !psd_layer->is_static())
 			{
 				std::wstring str = psd_layer->text_data().get(L"EngineDict.Editor.Text", L"");
@@ -508,11 +500,14 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 				{
 				case 1: // Right
 					scene_layer->anchor.x = text_producer.get()->pixel_constraints().width;
+					layer_x += psd_layer->size().width;
 					break;
 				case 2: // Center
 					scene_layer->anchor.x = text_producer.get()->pixel_constraints().width / 2.0;
+					layer_x += psd_layer->size().width / 2.0;
 					break;
 				}
+				crop_x_offset.bind(scene_layer->anchor.x);
 
 				auto text_layer_exists = std::find_if(text_producers_by_layer_name.begin(), text_producers_by_layer_name.end(),
 					[layer_name](const std::pair<std::wstring, spl::shared_ptr<core::text_producer>>& element) { return element.first == layer_name; });
@@ -568,7 +563,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 				if(layer_producer)
 					scene_layer = &current.scene()->create_layer(spl::make_shared_ptr(layer_producer), psd_layer->location().x, psd_layer->location().y, layer_name);
 			}
-
+			
 			if (layer_producer && scene_layer)
 			{
 				scene_layer->adjustments.opacity.set(psd_layer->opacity() / 255.0);
@@ -610,29 +605,27 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 						//this rectangle is in document-coordinates
 						auto mask = psd_layer->mask().vector()->rect();
 
+						auto vector_mask_x = root->create_variable<double>(variable_prefix + L"vector_mask_x", false);
+						auto vector_mask_y = root->create_variable<double>(variable_prefix + L"vector_mask_y", false);
+						vector_mask_x.set(mask.location.x);
+						vector_mask_y.set(mask.location.y);
+
 						//remap to layer-coordinates
-						auto left = static_cast<double>(mask.location.x) - scene_layer->position.x.get();
+
+						auto left = crop_x_offset + vector_mask_x - layer_x;
 						auto right = left + static_cast<double>(mask.size.width);
-						auto top = static_cast<double>(mask.location.y) - scene_layer->position.y.get();
+						scene_layer->crop.upper_left.x.bind(left);
+						scene_layer->crop.lower_right.x.bind(right);
+
+						auto top = vector_mask_y - layer_y;
 						auto bottom = top + static_cast<double>(mask.size.height);
-
-						scene_layer->crop.upper_left.x.unbind();
-						scene_layer->crop.upper_left.x.set(left);
-
-						scene_layer->crop.upper_left.y.unbind();
-						scene_layer->crop.upper_left.y.set(top);
-
-						scene_layer->crop.lower_right.x.unbind();
-						scene_layer->crop.lower_right.x.set(right);
-
-						scene_layer->crop.lower_right.y.unbind();
-						scene_layer->crop.lower_right.y.set(bottom);
+						scene_layer->crop.upper_left.y.bind(top);
+						scene_layer->crop.lower_right.y.bind(bottom);
 					}
-					// TODO - if vector mask is not a rectangle, then follow that shape?
 				}
 
 				if (psd_layer->has_timeline())
-					create_timelines(root, dependencies.format_desc, *scene_layer, psd_layer);
+					create_timelines(root, dependencies.format_desc, *scene_layer, psd_layer, variable_prefix);
 
 				if (psd_layer->is_movable() || psd_layer->is_resizable() || (psd_layer->is_text() && !psd_layer->is_static()))
 					current.add(scene_layer, psd_layer->tags(), psd_layer->mask().has_vector());
