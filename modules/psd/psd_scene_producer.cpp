@@ -393,12 +393,15 @@ void create_timelines(
 
 template<typename T>
 core::binding<T>& find_or_create_scene_variable(spl::shared_ptr<core::scene::scene_producer> root, const std::wstring& name) {
+	caspar::core::variable* var;
 	try {
-		return root->get_variable(name).as<T>();
+		// TODO - is this safe?
+		var = &root->get_variable(name);
 	}
 	catch (...) {
 		return root->create_variable<T>(name, true);
 	}
+	return var->as<T>();
 }
 
 typedef std::vector<std::pair<std::wstring, std::wstring>> cg_mappings_t;
@@ -492,8 +495,6 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			auto variable_prefix = L"layer." + boost::lexical_cast<std::wstring>(index) + L".";
 
 			auto crop_x_offset = root->create_variable<double>(variable_prefix + L"crop_x_offset", false);
-			auto layer_x = static_cast<double>(psd_layer->location().x);
-			auto layer_y = static_cast<double>(psd_layer->location().y);
 
 			if(psd_layer->is_text() && !psd_layer->is_static())
 			{
@@ -519,11 +520,9 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 				{
 				case 1: // Right
 					scene_layer->anchor.x = text_producer.get()->pixel_constraints().width;
-					layer_x += psd_layer->size().width;
 					break;
 				case 2: // Center
 					scene_layer->anchor.x = text_producer.get()->pixel_constraints().width / 2.0;
-					layer_x += psd_layer->size().width / 2.0;
 					break;
 				}
 				crop_x_offset.bind(scene_layer->anchor.x);
@@ -687,15 +686,20 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 
 						//remap to layer-coordinates
 
-						auto left = crop_x_offset + vector_mask_x - layer_x;
+						auto left = crop_x_offset + vector_mask_x - scene_layer->position.x;
 						auto right = left + static_cast<double>(mask.size.width);
 						scene_layer->crop.upper_left.x.bind(left);
 						scene_layer->crop.lower_right.x.bind(right);
+						
+						auto upper = vector_mask_y - scene_layer->position.y;
+						if (psd_layer->is_text()) {
+							// Text uses 0 to be baseline, not top corner
+							upper = upper + layer_producer->pixel_constraints().height;
+						}
+						auto lower = upper + static_cast<double>(mask.size.height);
 
-						auto top = vector_mask_y - layer_y;
-						auto bottom = top + static_cast<double>(mask.size.height);
-						scene_layer->crop.upper_left.y.bind(top);
-						scene_layer->crop.lower_right.y.bind(bottom);
+						scene_layer->crop.upper_left.y.bind(upper);
+						scene_layer->crop.lower_right.y.bind(lower);
 					}
 				}
 
