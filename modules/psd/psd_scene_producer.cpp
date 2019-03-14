@@ -391,6 +391,18 @@ void create_timelines(
 	}
 }
 
+template<typename T>
+core::binding<T>& find_or_create_scene_variable(spl::shared_ptr<core::scene::scene_producer> root, const std::wstring& name) {
+	try {
+		return root->get_variable(name).as<T>();
+	}
+	catch (...) {
+		return root->create_variable<T>(name, true);
+	}
+}
+
+typedef std::vector<std::pair<std::wstring, std::wstring>> cg_mappings_t;
+
 spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::frame_producer_dependencies& dependencies, const std::vector<std::wstring>& params)
 {
 	std::wstring filename = env::template_folder() + params.at(0) + L".psd";
@@ -405,6 +417,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 	auto root = spl::make_shared<core::scene::scene_producer>(L"psd", params.at(0), doc.width(), doc.height(), dependencies.format_desc);
 
 	std::vector<std::pair<std::wstring, spl::shared_ptr<core::text_producer>>> text_producers_by_layer_name;
+	std::vector<std::pair<spl::shared_ptr<core::frame_producer>, cg_mappings_t>> cg_producers_with_mappings;
 
 	std::stack<dependency_resolver> scene_stack;
 	scene_stack.push(dependency_resolver{ root, true });
@@ -412,6 +425,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 	auto layers_end = doc.layers().rend();
 	for(auto it = doc.layers().rbegin(); it != layers_end; ++it)
 	{
+		auto index = it - doc.layers().rbegin();
 		auto& psd_layer = (*it);
 		auto& current = scene_stack.top();
 
@@ -444,8 +458,11 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			if (psd_layer->is_resizable())	//TODO: we could add support for resizable groups with vector masks
 				CASPAR_LOG(warning) << "Groups doesn't support the \"resizable\"-tag.";
 
-			if (psd_layer->is_placeholder())
+			if (psd_layer->is_producer())
 				CASPAR_LOG(warning) << "Groups doesn't support the \"producer\"-tag.";
+
+			if (psd_layer->is_cg_producer())
+				CASPAR_LOG(warning) << "Groups doesn't support the \"cg\"-tag.";
 
 			if (psd_layer->is_cornerpin())
 				CASPAR_LOG(warning) << "Groups doesn't support the \"cornerpin\"-tag.";
@@ -470,7 +487,9 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			std::shared_ptr<core::frame_producer> layer_producer;
 			auto layer_name = psd_layer->name();
 
-			auto variable_prefix = L"layer." + layer_name + L".";
+			std::vector<std::pair<std::wstring, std::wstring>> cg_mappings;
+
+			auto variable_prefix = L"layer." + boost::lexical_cast<std::wstring>(index) + L".";
 
 			auto crop_x_offset = root->create_variable<double>(variable_prefix + L"crop_x_offset", false);
 			auto layer_x = static_cast<double>(psd_layer->location().x);
@@ -523,7 +542,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			}
 			else
 			{
-				if (psd_layer->is_placeholder())
+				if (psd_layer->is_producer() || psd_layer->is_cg_producer())
 				{
 					auto width = psd_layer->bitmap() ? psd_layer->bitmap()->width() : doc.width();
 					auto height = psd_layer->bitmap() ? psd_layer->bitmap()->height() : doc.height();
@@ -551,9 +570,45 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 							adjusted_format_desc.field_count = 1;
 							adjusted_format_desc.audio_cadence = core::find_audio_cadence(adjusted_format_desc.framerate);
 
-							return dependencies.producer_registry->create_producer(adjusted_dependencies, layer_name);
+							auto producer_name = layer_name;
+							if (psd_layer->is_cg_producer()) {
+								std::wstringstream name_stream;
+								// TODO - can we not always set autoplay. plus what about json for html?
+
+								auto start_bracket = layer_name.find_first_of(L'(');
+								auto end_bracket = layer_name.find_first_of(L')');
+								if (start_bracket != std::wstring::npos && end_bracket > start_bracket) {
+									auto str = layer_name.substr(start_bracket + 1, end_bracket - start_bracket - 1);
+									producer_name = layer_name.substr(end_bracket + 1);
+									name_stream << L"[CG] " << producer_name << L" [AUTOPLAY] ";
+
+									std::vector<std::wstring> tokens;
+									boost::split(tokens, str, boost::is_any_of(L", "), boost::token_compress_on);
+
+									for (auto& token : tokens) {
+										auto ind = token.find_first_of(L'>');
+										if (ind == std::wstring::npos) {
+											cg_mappings.emplace_back(token, token);
+											name_stream << L" string " << token;
+										} else {
+											auto var_name = token.substr(ind + 1);
+											cg_mappings.emplace_back(token.substr(0, ind), var_name);
+											name_stream << L" string " << var_name;
+										}
+									}
+								} else {
+									name_stream << L"[CG] " << producer_name << L" [AUTOPLAY] ";
+								}
+								producer_name = name_stream.str();
+							}
+
+							return dependencies.producer_registry->create_producer(adjusted_dependencies, producer_name);
 						}();
 						hotswap->producer().set(producer);
+						
+						if (psd_layer->is_cg_producer() && producer != core::frame_producer::empty()) {
+							cg_producers_with_mappings.emplace_back(producer, cg_mappings);
+						}
 					}
 
 					layer_producer = hotswap;
@@ -593,7 +648,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 
 				if (psd_layer->mask().has_vector()) {
 
-					if (psd_layer->is_placeholder() && psd_layer->is_cornerpin()) {
+					if (psd_layer->is_producer() && psd_layer->is_cornerpin()) {
 
 						psd::point<int> layer_pos{ static_cast<int>(scene_layer->position.x.get()), static_cast<int>(scene_layer->position.y.get()) };
 						auto unbind_and_set = [&layer_pos](caspar::core::scene::coord& c, const caspar::psd::point<int>& pt) {
@@ -650,7 +705,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 				if (psd_layer->is_movable() || psd_layer->is_resizable() || (psd_layer->is_text() && !psd_layer->is_static()))
 					current.add(scene_layer, psd_layer->tags(), psd_layer->mask().has_vector());
 
-				if (psd_layer->is_placeholder())
+				if (psd_layer->is_producer())
 					scene_layer->use_mipmap.set(true);
 			}
 		}
@@ -668,8 +723,24 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 	// Reset all dynamic text fields to empty strings and expose them as a scene parameter.
 	for (auto& text_layer : text_producers_by_layer_name) {
 		text_layer.second->text().set(L"");
-		auto var = root->create_variable<std::wstring>(text_layer.first, true, L"");
+		auto var = find_or_create_scene_variable<std::wstring>(root, text_layer.first);
 		text_layer.second->text().bind(var);
+	}
+	// Expose all fields reported by the cg producers
+	for (auto& producer : cg_producers_with_mappings) {
+		auto prod = producer.first;
+		auto mappings = producer.second;
+
+		for (auto& mapping : mappings) {
+			auto& prod_var = prod->get_variable(mapping.second);
+
+			if (prod_var.is<double>())
+				prod_var.as<double>().bind(find_or_create_scene_variable<double>(root, mapping.first));
+			else if (prod_var.is<std::wstring>())
+				prod_var.as<std::wstring>().bind(find_or_create_scene_variable<std::wstring>(root, mapping.first));
+			else if (prod_var.is<bool>())
+				prod_var.as<bool>().bind(find_or_create_scene_variable<bool>(root, mapping.first));
+		}
 	}
 
 	auto params2 = params;

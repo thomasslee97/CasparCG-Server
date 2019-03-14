@@ -296,6 +296,11 @@ struct scene_producer::impl
 		task_subscriptions_.push_back(std::move(subscription));
 	}
 
+	bool has_variable(const std::wstring& name)
+	{
+		return variables_.find(name) != variables_.end();
+	}
+
 	core::variable& get_variable(const std::wstring& name)
 	{
 		auto found = variables_.find(name);
@@ -845,6 +850,10 @@ void scene_producer::add_task(binding<bool> when, std::function<void ()> task)
 	impl_->add_task(std::move(when), std::move(task));
 }
 
+bool scene_producer::has_variable(const std::wstring& name)
+{
+	return impl_->has_variable(name);
+}
 core::variable& scene_producer::get_variable(const std::wstring& name)
 {
 	return impl_->get_variable(name);

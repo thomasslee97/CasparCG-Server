@@ -258,6 +258,7 @@ public:
 	void add_mark(int64_t at_frame, mark_action action, const std::wstring& label);
 	void add_task(binding<bool> when, std::function<void ()> task);
 
+	bool has_variable(const std::wstring& name);
 	core::variable& get_variable(const std::wstring& name) override;
 	const std::vector<std::wstring>& get_variables() const override;
 private:
