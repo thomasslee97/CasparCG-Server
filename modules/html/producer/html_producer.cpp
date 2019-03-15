@@ -396,7 +396,7 @@ private:
 				graph_->set_tag(diagnostics::tag_severity::SILENT, "browser-dropped-frame");
 			} else {
 				std::lock_guard<std::mutex> lock(last_frame_mutex_);
-				last_progressive_frame_ = frame1;
+				last_progressive_frame_ = frame2;
 				last_frame_ = core::draw_frame::interlace(frame1, frame2, format_desc_.field_mode);
 			}
 		} else {
