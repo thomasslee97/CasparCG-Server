@@ -1,5 +1,10 @@
 C H A N G E S
 
+CasparCG 2.1.6 NRK (w.r.t 2.1.5 NRK)
+==========================================
+
+  o Fix html sometimes getting stuck on penultimate frame of animation
+
 CasparCG 2.1.5 NRK (w.r.t 2.1.4 NRK)
 ==========================================
 
