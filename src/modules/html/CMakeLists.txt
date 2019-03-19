@@ -34,9 +34,9 @@ if(MSVC)
 		core
 
 		optimized release/libcef
-		optimized release/libcef_dll_wrapper
+		optimized release/vs2017/libcef_dll_wrapper
 		debug debug/libcef
-		debug debug/libcef_dll_wrapper
+		debug debug/vs2017/libcef_dll_wrapper
 	)
 else()
 	target_link_libraries(html

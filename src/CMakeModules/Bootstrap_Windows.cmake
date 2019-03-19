@@ -154,10 +154,15 @@ casparcg_add_runtime_dependency("${LIBERATION_FONTS_BIN_PATH}/LiberationMono-Reg
 
 # CEF
 if (ENABLE_HTML)
-	set(CEF_INCLUDE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64")
-	set(CEF_BIN_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64/Debug")
-	set(CEF_RESOURCE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64/Resources")
-	link_directories("${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64")
+	set(CEF_INCLUDE_PATH "${NUGET_PACKAGES_FOLDER}/cef.sdk.3.3578.1870/CEF")
+	set(CEF_BIN_PATH "${NUGET_PACKAGES_FOLDER}/cef.redist.x64.3.3578.1870/CEF")
+	set(CEF_RESOURCE_PATH "${NUGET_PACKAGES_FOLDER}/cef.redist.x64.3.3578.1870/CEF")
+	link_directories("${NUGET_PACKAGES_FOLDER}/cef.sdk.3.3578.1870/CEF/x64")
+
+	#set(CEF_INCLUDE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64")
+	#set(CEF_BIN_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64/Debug")
+	#set(CEF_RESOURCE_PATH "${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64/Resources")
+	#link_directories("${NUGET_PACKAGES_FOLDER}/cef_binary_3.3578.1860.g36610bd_windows64")
 
 	casparcg_add_runtime_dependency("${CEF_RESOURCE_PATH}/locales")
 	casparcg_add_runtime_dependency("${CEF_BIN_PATH}/swiftshader")
