@@ -181,19 +181,18 @@ struct image_kernel::impl
 
 		auto do_crop = [&](core::frame_geometry::coord& coord)
 		{
-			if (is_default_geometry) {
-				coord.vertex_x = std::max(coord.vertex_x, crop.ul[0]);
-				coord.vertex_x = std::min(coord.vertex_x, crop.lr[0]);
-				coord.vertex_y = std::max(coord.vertex_y, crop.ul[1]);
-				coord.vertex_y = std::min(coord.vertex_y, crop.lr[1]);
-				coord.texture_x = std::max(coord.texture_x, crop.ul[0]);
-				coord.texture_x = std::min(coord.texture_x, crop.lr[0]);
-				coord.texture_y = std::max(coord.texture_y, crop.ul[1]);
-				coord.texture_y = std::min(coord.texture_y, crop.lr[1]);
-			} else {
-				// TODO refactor
+			if (!is_default_geometry)
+				// TODO implement support for non-default geometry.
+				return;
 
-			}
+			coord.vertex_x = std::max(coord.vertex_x, crop.ul[0]);
+			coord.vertex_x = std::min(coord.vertex_x, crop.lr[0]);
+			coord.vertex_y = std::max(coord.vertex_y, crop.ul[1]);
+			coord.vertex_y = std::min(coord.vertex_y, crop.lr[1]);
+			coord.texture_x = std::max(coord.texture_x, crop.ul[0]);
+			coord.texture_x = std::min(coord.texture_x, crop.lr[0]);
+			coord.texture_y = std::max(coord.texture_y, crop.ul[1]);
+			coord.texture_y = std::min(coord.texture_y, crop.lr[1]);
 		};
 		auto do_perspective = [=](core::frame_geometry::coord& coord, const boost::array<double, 2>& pers_corner)
 		{
@@ -218,29 +217,19 @@ struct image_kernel::impl
 			coord.vertex_y += f_p[1];
 		};
 
-		// TODO - refactor to fit with the other mods better..
-		if (!is_default_geometry) {
-			// TODO - starting with y only.
-			// TODO - assuming that u is above l
-			// TODO - handle non quadrilaterals vertices
+		if (!is_default_geometry && params.geometry.type() == core::frame_geometry::geometry_type::quad_list_croppable) {
+			// This assumes that the quads are not skewed or rotated in any way, as that is all that is needed for now, and it keeps the calculations a lot simpler
 
-			// start CROP
-
-			// TODO - check if there is any crop first
-
-			// TODO - for now assuming that geometry is kept as right way up rectangles
-
-			auto top = crop.ul[1] - 1;
-			auto bot = crop.lr[1] - 1;
-			auto left = crop.ul[0];
-			auto right = crop.lr[0];
+			const double top = crop.ul[1] - 1;
+			const double bot = crop.lr[1] - 1;
+			const double left = crop.ul[0];
+			const double right = crop.lr[0];
 			// if crop lines are flipped, then drop
 			if (top > bot || right < left)
 				return;
 
 			// For each quad
 			for (auto i = 0; i < coords.size(); i += 4) {
-
 				auto do_crop_y = [&](core::frame_geometry::coord& c1, core::frame_geometry::coord& c2, double y)
 				{
 					auto y_range = c1.vertex_y - c2.vertex_y;
@@ -265,8 +254,6 @@ struct image_kernel::impl
 					c1.vertex_x = x;
 					c1.texture_x = new_tex_x + c2.texture_x;
 				};
-
-				// TODO - text is vertical aligned a little weird...
 
 				// TOP
 				if (coords[i].vertex_y < top) {
@@ -308,12 +295,7 @@ struct image_kernel::impl
 					coords[i + 3] = core::frame_geometry::coord{};
 					continue;
 				}
-
 			}
-
-
-
-			// end CROP
 		}
 
 		int corner = 0;
@@ -520,6 +502,7 @@ struct image_kernel::impl
 		{
 		case core::frame_geometry::geometry_type::quad:
 		case core::frame_geometry::geometry_type::quad_list:
+		case core::frame_geometry::geometry_type::quad_list_croppable:
 			{
 				glClientActiveTexture(GL_TEXTURE0);
 

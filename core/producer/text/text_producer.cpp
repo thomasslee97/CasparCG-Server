@@ -147,15 +147,17 @@ struct text_producer::impl
 	std::vector<const_frame>				atlas_frames_;
 	text::texture_font						font_;
 	text::color<double>						color_;
+	bool									croppable_;
 
 public:
-	explicit impl(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone)
+	explicit impl(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone, bool croppable)
 		: frame_factory_(frame_factory)
 		, x_(x), y_(y)
 		, parent_width_(parent_width), parent_height_(parent_height)
 		, standalone_(standalone)
 		, font_(atlas_, text::find_font_file(text_info), !standalone, text_info.color)
 		, color_(text_info.color)
+		, croppable_(croppable)
 	{
 		font_.load_blocks_for_string(str);
 		atlas_frames_ = create_atlas_frames();
@@ -232,7 +234,9 @@ public:
 			if (coords.size() == 0)
 				continue;
 
-			const_frame frame = it->with_geometry(frame_geometry(frame_geometry::geometry_type::quad_list, std::move(coords)));
+			// Text is not vertically aligned within the default crop, so don't crop unless explicitly opted in
+			auto type = croppable_ ? frame_geometry::geometry_type::quad_list_croppable : frame_geometry::geometry_type::quad_list;
+			const_frame frame = it->with_geometry(frame_geometry(type, std::move(coords)));
 
 			res.push_back(std::move(draw_frame(std::move(frame))));
 		}
@@ -327,12 +331,13 @@ public:
 		info.add(L"text", text_.value().get());
 		info.add(L"font", font_.get_name());
 		info.add(L"size", font_.get_size());
+		info.add(L"croppable", croppable_);
 		return info;
 	}
 };
 
-text_producer::text_producer(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone)
-	: impl_(new impl(frame_factory, x, y, str, text_info, parent_width, parent_height, standalone))
+text_producer::text_producer(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone, bool croppable)
+	: impl_(new impl(frame_factory, x, y, str, text_info, parent_width, parent_height, standalone, croppable))
 {}
 
 draw_frame text_producer::receive_impl() { return impl_->receive_impl(); }
@@ -350,16 +355,16 @@ binding<double>& text_producer::tracking() { return impl_->tracking(); }
 const binding<double>& text_producer::current_bearing_y() const { return impl_->current_bearing_y(); }
 const binding<double>& text_producer::current_protrude_under_y() const { return impl_->current_protrude_under_y(); }
 
-spl::shared_ptr<text_producer> text_producer::create(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone)
+spl::shared_ptr<text_producer> text_producer::create(const spl::shared_ptr<frame_factory>& frame_factory, int x, int y, const std::wstring& str, text::text_info& text_info, long parent_width, long parent_height, bool standalone, bool croppable)
 {
-	return spl::make_shared<text_producer>(frame_factory, x, y, str, text_info, parent_width, parent_height, standalone);
+	return spl::make_shared<text_producer>(frame_factory, x, y, str, text_info, parent_width, parent_height, standalone, croppable);
 }
 namespace text {
 
 void describe_text_producer(help_sink& sink, const help_repository& repo)
 {
 	sink.short_description(L"A producer for rendering dynamic text.");
-	sink.syntax(L"[TEXT] [text:string] {[x:int] [y:int]} {FONT [font:string]|verdana} {SIZE [size:float]|30.0} {COLOR [color:string]|#ffffffff} {STANDALONE [standalone:0,1]|0}");
+	sink.syntax(L"[TEXT] [text:string] {[x:int] [y:int]} {FONT [font:string]|verdana} {SIZE [size:float]|30.0} {COLOR [color:string]|#ffffffff} {STANDALONE [standalone:0,1]|0} {CROPPABLE [croppable:0,1]|0}");
 	sink.para()
 		->text(L"Renders dynamic text using fonts found under the ")->code(L"fonts")->text(L" folder. ")
 		->text(L"Parameters:");
@@ -370,7 +375,8 @@ void describe_text_producer(help_sink& sink, const help_repository& repo)
 		->item(L"font", L"The name of the font (not the actual filename, but the font name).")
 		->item(L"size", L"The point size.")
 		->item(L"color", L"The color as an ARGB hex value.")
-		->item(L"standalone", L"Whether to normalize coordinates or not.");
+		->item(L"standalone", L"Whether to normalize coordinates or not.")
+		->item(L"croppable", L"Whether to allow cropping. This means cropping is required, otherwise the top and bottom of characters will be lost.");
 	sink.para()->text(L"Examples:");
 	sink.example(L">> PLAY 1-10 [TEXT] \"John Doe\" 0 0 FONT ArialMT SIZE 30 COLOR #1b698d STANDALONE 1");
 	sink.example(L">> CALL 1-10 \"Jane Doe\"", L"for modifying the text while playing.");
@@ -399,6 +405,7 @@ spl::shared_ptr<frame_producer> create_text_producer(const frame_producer_depend
 	text_info.color = core::text::color<double>(col_val);
 
 	bool standalone = get_param(L"STANDALONE", params, false);
+	bool croppable = get_param(L"CROPPABLE", params, false);
 
 	return text_producer::create(
 			dependencies.frame_factory,
@@ -406,7 +413,8 @@ spl::shared_ptr<frame_producer> create_text_producer(const frame_producer_depend
 			params.at(1),
 			text_info,
 			dependencies.format_desc.width, dependencies.format_desc.height,
-			standalone);
+			standalone,
+			croppable);
 }
 
 }}}

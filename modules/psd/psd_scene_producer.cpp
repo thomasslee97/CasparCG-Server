@@ -507,7 +507,8 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 				text_info.scale_y = psd_layer->scale().y / max_scale;
 				text_info.shear = 0;
 
-				auto text_producer = core::text_producer::create(dependencies.frame_factory, 0, 0, str, text_info, doc.width(), doc.height());
+				const bool croppable = psd_layer->mask().has_vector() && !psd_layer->mask().vector()->rect().empty();
+				auto text_producer = core::text_producer::create(dependencies.frame_factory, 0, 0, str, text_info, doc.width(), doc.height(), false, croppable);
 				//text_producer->pixel_constraints().width.set(psd_layer->size().width);
 				//text_producer->pixel_constraints().height.set(psd_layer->size().height);
 
