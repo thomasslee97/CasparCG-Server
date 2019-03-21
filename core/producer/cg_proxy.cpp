@@ -372,9 +372,11 @@ public:
 	{
 		auto& command = params.at(0);
 
-		if (command == L"play()")
+		if (command == L"play()") {
 			proxy_->play(0);
-		else if (command == L"stop()")
+			// Flash doesnt accept update until play, so send an extra update after play to be safe
+			proxy_->update(0, template_data_xml_.get());
+		}  else if (command == L"stop()")
 			proxy_->stop(0, 0);
 		else if (command == L"next()")
 			proxy_->next(0);

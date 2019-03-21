@@ -281,9 +281,26 @@ void create_timelines(
 	auto start_frame	= get_frame_number(format_desc, start);
 	auto end_frame		= get_frame_number(format_desc, end);
 
-	layer.hidden =
-			scene->timeline_frame() < boost::rational_cast<int64_t>(start_frame)
-			|| scene->timeline_frame() > boost::rational_cast<int64_t>(end_frame);
+	if (psd_layer->is_cg_producer()) {
+		// Play on first frame
+		core::binding<bool> play_condition = scene->timeline_frame() == boost::rational_cast<int64_t>(start_frame);
+		scene->add_task(std::move(play_condition), [=]
+		{
+			layer.producer.get()->call({ L"play()" });
+		});
+
+		// Stop on last frame
+		core::binding<bool> stop_condition = scene->timeline_frame() == boost::rational_cast<int64_t>(end_frame);
+		scene->add_task(std::move(stop_condition), [=]
+		{
+			layer.producer.get()->call({ L"stop()" });
+		});
+	} else {
+		layer.hidden =
+				scene->timeline_frame() < boost::rational_cast<int64_t>(start_frame)
+				|| scene->timeline_frame() > boost::rational_cast<int64_t>(end_frame);
+	}
+	
 
 	auto tracklist = timeline.get_child_optional(L"trackList");
 
@@ -573,14 +590,14 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 							auto producer_name = layer_name;
 							if (psd_layer->is_cg_producer()) {
 								std::wstringstream name_stream;
-								// TODO - can we not always set autoplay. plus what about json for html?
+								// TODO - how to allow json for html?
 
 								auto start_bracket = layer_name.find_first_of(L'(');
 								auto end_bracket = layer_name.find_first_of(L')');
 								if (start_bracket != std::wstring::npos && end_bracket > start_bracket) {
 									auto str = layer_name.substr(start_bracket + 1, end_bracket - start_bracket - 1);
 									producer_name = layer_name.substr(end_bracket + 1);
-									name_stream << L"[CG] " << producer_name << L" [AUTOPLAY] ";
+									name_stream << L"[CG] " << producer_name;
 
 									std::vector<std::wstring> tokens;
 									boost::split(tokens, str, boost::is_any_of(L", "), boost::token_compress_on);
@@ -597,7 +614,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 										}
 									}
 								} else {
-									name_stream << L"[CG] " << producer_name << L" [AUTOPLAY] ";
+									name_stream << L"[CG] " << producer_name;
 								}
 								producer_name = name_stream.str();
 							}
