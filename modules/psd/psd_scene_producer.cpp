@@ -446,6 +446,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 	for(auto it = doc.layers().rbegin(); it != layers_end; ++it)
 	{
 		auto index = it - doc.layers().rbegin();
+		auto variable_prefix = L"layer." + boost::lexical_cast<std::wstring>(index) + L".";
 		auto& psd_layer = (*it);
 		auto& current = scene_stack.top();
 
@@ -470,7 +471,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			scene_layer.hidden.set(!psd_layer->is_visible());
 
 			if (psd_layer->has_timeline())
-				create_timelines(root, dependencies.format_desc, scene_layer, psd_layer, L"TODO");
+				create_timelines(root, dependencies.format_desc, scene_layer, psd_layer, variable_prefix);
 
 			if (psd_layer->is_movable())
 				current.add(&scene_layer, psd_layer->tags(), false);
@@ -508,8 +509,6 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 			auto layer_name = psd_layer->name();
 
 			std::vector<std::pair<std::wstring, std::wstring>> cg_mappings;
-
-			auto variable_prefix = L"layer." + boost::lexical_cast<std::wstring>(index) + L".";
 
 			auto crop_x_offset = root->create_variable<double>(variable_prefix + L"crop_x_offset", false);
 
@@ -748,7 +747,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 		auto var = find_or_create_scene_variable<std::wstring>(root, text_layer.first);
 		text_layer.second->text().bind(var);
 	}
-	// Expose all fields reported by the cg producers
+	// Map all fields requested by the cg producers
 	for (auto& producer : cg_producers_with_mappings) {
 		auto prod = producer.first;
 		auto mappings = producer.second;
