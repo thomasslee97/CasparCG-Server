@@ -111,12 +111,54 @@ void init(module_dependencies dependencies)
 	dependencies.producer_registry->register_producer_factory(L"Text Producer", create_text_producer, describe_text_producer);
 }
 
+class font_filename_cache
+{
+private:
+	std::map<std::wstring, std::wstring> fonts_;
+	std::mutex mutex_;
+
+public:
+	static std::shared_ptr<font_filename_cache>& get()
+	{
+		static auto cache = std::make_shared<font_filename_cache>();
+		return cache;
+	}
+
+	std::wstring find_font_file(const text_info& info) {
+		std::wstring filename = L"";
+		{
+			// Pull value from cache
+			std::unique_lock<std::mutex> lock(mutex_);
+			auto it = fonts_.find(info.font);
+			if (it != fonts_.end())
+				filename = (*it).second;
+		}
+
+		// Check cached value still looks valid
+		if (filename != L"" && boost::filesystem::exists(filename)) {
+			return filename;
+		}
+
+		// Calculate new value
+		auto fonts = enumerate_fonts();
+		auto it = std::find_if(fonts.begin(), fonts.end(), font_comparer(info.font));
+		filename = (it != fonts.end()) ? (*it).second : L"";
+
+		if (filename != L"") {
+			// Write back to cache
+			std::unique_lock<std::mutex> lock(mutex_);
+			fonts_[info.font] = filename;
+		}
+
+		return filename;
+	};
+};
+
 text_info& find_font_file(text_info& info)
 {
-	auto& font_name = info.font;
-	auto fonts = enumerate_fonts();
-	auto it = std::find_if(fonts.begin(), fonts.end(), font_comparer(font_name));
-	info.font_file = (it != fonts.end()) ? (*it).second : L"";
+	auto cache = font_filename_cache::get();
+	info.font_file = cache->find_font_file(info);
+
 	return info;
 }
 
@@ -155,7 +197,7 @@ public:
 		, x_(x), y_(y)
 		, parent_width_(parent_width), parent_height_(parent_height)
 		, standalone_(standalone)
-		, font_(atlas_, text::find_font_file(text_info), !standalone, text_info.color)
+		, font_(atlas_, text::find_font_file(text_info), text_info.color)
 		, color_(text_info.color)
 		, croppable_(croppable)
 	{
@@ -212,7 +254,7 @@ public:
 		text::string_metrics metrics;
 		font_.set_tracking(tracking_.value().get());
 
-		std::vector<text::text_char> vertex_stream = font_.create_vertex_stream(str, x_, y_, parent_width_, parent_height_, &metrics, shear_.value().get());
+		std::vector<text::text_char> vertex_stream = font_.create_vertex_stream(str, x_, y_, parent_width_, parent_height_, standalone_, &metrics, shear_.value().get());
 
 		std::vector<draw_frame> res;
 		for (auto it = atlas_frames_.begin(); it != atlas_frames_.end(); ++it)

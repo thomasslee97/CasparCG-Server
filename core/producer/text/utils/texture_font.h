@@ -29,10 +29,10 @@ class texture_font
 	const texture_font& operator=(const texture_font&);
 
 public:
-	texture_font(texture_atlas_set&, const text_info&, bool normalize_coordinates, color<double>& col);
+	texture_font(texture_atlas_set&, const text_info&, color<double>& col);
 	bool load_blocks_for_string(const std::wstring str);
 	void set_tracking(double tracking);
-	std::vector<text_char> create_vertex_stream(const std::wstring& str, int x, int y, int parent_width, int parent_height, string_metrics* metrics, double shear = 0.0);
+	std::vector<text_char> create_vertex_stream(const std::wstring& str, int x, int y, int parent_width, int parent_height, bool normalize_coordinates, string_metrics* metrics, double shear = 0.0);
 	std::wstring get_name() const;
 	double get_size() const;
 

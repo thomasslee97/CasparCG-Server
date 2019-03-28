@@ -40,21 +40,18 @@ private:
 	texture_atlas_set				atlas_set_;
 	double							size_;
 	double							tracking_;
-	bool							normalize_;
 	std::map<int, glyph_info>		glyphs_;
 	std::vector<unicode_block>		loaded_blocks_;
 	std::wstring					name_;
-	bool							normalize_coordinates_;
 	color<double>					col_;
 
 public:
-	impl(texture_atlas_set& atlas_set, const text_info& info, const bool normalize_coordinates, color<double>& col)
+	impl(texture_atlas_set& atlas_set, const text_info& info, color<double>& col)
 		: face_(get_new_face(u8(info.font_file), u8(info.font)))
 		, atlas_set_(atlas_set)
 		, size_(info.size)
 		, tracking_(info.size*info.tracking/1000.0)
-		, normalize_(normalize_coordinates)
-		, name_(info.font), normalize_coordinates_(normalize_coordinates)
+		, name_(info.font)
 		, col_(col)
 	{
 		if (FT_Set_Char_Size(face_.get(), static_cast<FT_F26Dot6>(size_*64), 0, 72, 72))
@@ -123,7 +120,7 @@ public:
 		}
 	}
 
-	std::vector<text_char> create_vertex_stream(const std::wstring& str, const int x, const int y, const int parent_width, const int parent_height, string_metrics* metrics, double shear)
+	std::vector<text_char> create_vertex_stream(const std::wstring& str, const int x, const int y, const int parent_width, const int parent_height, bool normalize, string_metrics* metrics, double shear)
 	{
 		std::vector<text_char> result;
 		result.resize(str.length());
@@ -211,7 +208,7 @@ public:
 			previous = glyph_index;
 		}
 
-		if(normalize_)
+		if(normalize)
 		{
 			const auto ratio_x = parent_width / (pos_x - tracking_ - x);
 			const auto ratio_y = parent_height / static_cast<double>(maxHeight);
@@ -252,10 +249,10 @@ public:
 	}
 };
 
-texture_font::texture_font(texture_atlas_set& atlas, const text_info& info, const bool normalize_coordinates, color<double>& col) : impl_(new impl(atlas, info, normalize_coordinates, col)) {}
+texture_font::texture_font(texture_atlas_set& atlas, const text_info& info, color<double>& col) : impl_(new impl(atlas, info, col)) {}
 bool texture_font::load_blocks_for_string(const std::wstring str) { return impl_->load_blocks_for_string(str); }
 void texture_font::set_tracking(const double tracking) { impl_->set_tracking(tracking); }
-std::vector<text_char> texture_font::create_vertex_stream(const std::wstring& str, const int x, const int y, const int parent_width, const int parent_height, string_metrics* metrics, const double shear) { return impl_->create_vertex_stream(str, x, y, parent_width, parent_height, metrics, shear); }
+std::vector<text_char> texture_font::create_vertex_stream(const std::wstring& str, const int x, const int y, const int parent_width, const int parent_height, bool normalize, string_metrics* metrics, const double shear) { return impl_->create_vertex_stream(str, x, y, parent_width, parent_height, normalize, metrics, shear); }
 std::wstring texture_font::get_name() const { return impl_->get_name(); }
 double texture_font::get_size() const { return impl_->get_size(); }
 
