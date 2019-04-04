@@ -254,7 +254,7 @@ public:
 		text::string_metrics metrics;
 		font_.set_tracking(tracking_.value().get());
 
-		std::vector<text::text_char> vertex_stream = font_.create_vertex_stream(str, x_, y_, parent_width_, parent_height_, standalone_, &metrics, shear_.value().get());
+		std::vector<text::text_char> vertex_stream = font_.create_vertex_stream(str, x_, y_, parent_width_, parent_height_, !standalone_, &metrics, shear_.value().get());
 
 		std::vector<draw_frame> res;
 		for (auto it = atlas_frames_.begin(); it != atlas_frames_.end(); ++it)
