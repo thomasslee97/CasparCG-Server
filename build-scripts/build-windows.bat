@@ -45,7 +45,7 @@ copy ..\deploy\general\CasparCG_Server_2.0-brochure.pdf "%SERVER_FOLDER%" || got
 echo Copying binaries...
 copy shell\*.dll "%SERVER_FOLDER%\server" || goto :error
 copy shell\Release\casparcg.exe "%SERVER_FOLDER%\server" || goto :error
-copy shell\Release\casparcg.pdb "%SERVER_FOLDER%\server" || goto :error
+REM copy shell\Release\casparcg.pdb "%SERVER_FOLDER%\server" || goto :error
 copy ..\shell\casparcg_auto_restart.bat "%SERVER_FOLDER%\server" || goto :error
 copy shell\casparcg.config "%SERVER_FOLDER%\server" || goto :error
 copy shell\*.ttf "%SERVER_FOLDER%\server" || goto :error
