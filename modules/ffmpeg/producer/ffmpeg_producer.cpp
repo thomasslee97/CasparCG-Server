@@ -120,6 +120,7 @@ public:
 			const std::wstring& filter,
 			bool loop,
 			uint32_t in,
+			uint32_t seek,
 			uint32_t out,
 			bool thumbnail_mode,
 			const std::wstring& custom_channel_order,
@@ -127,7 +128,7 @@ public:
 		: filename_(url_or_file)
 		, frame_factory_(frame_factory)
 		, initial_logger_disabler_(temporary_enable_quiet_logging_for_thread(thumbnail_mode))
-		, input_(graph_, url_or_file, loop, in, out, thumbnail_mode, vid_params)
+		, input_(graph_, url_or_file, loop, in, seek, out, thumbnail_mode, vid_params)
                 , worker_(L"FFmpeg worker - " + filename_)
                 , abort_(false)
 		, framerate_(read_framerate(*input_.context(), format_desc.framerate))
@@ -778,8 +779,13 @@ spl::shared_ptr<core::frame_producer> create_producer(
 
 	auto loop					= contains_param(L"LOOP",		params);
 
-	auto in						= get_param(L"SEEK",			params, static_cast<uint32_t>(0)); // compatibility
-	in							= get_param(L"IN",				params, in);
+	auto seek					= get_param(L"SEEK",			params, static_cast<uint32_t>(0));
+	auto in						= get_param(L"IN",				params, seek);
+
+	if (!contains_param(L"SEEK", params)) {
+		// Default to the same when only one is defined
+		seek = in;
+	}
 
 	auto out					= get_param(L"LENGTH",			params, uint32_max);
 	if (out < uint32_max - in)
@@ -819,6 +825,7 @@ spl::shared_ptr<core::frame_producer> create_producer(
 			filter_str,
 			loop,
 			in,
+			seek,
 			out,
 			false,
 			custom_channel_order,
@@ -861,6 +868,7 @@ core::draw_frame create_thumbnail_frame(
 			filename,
 			filter_str,
 			loop,
+			in,
 			in,
 			out,
 			true,

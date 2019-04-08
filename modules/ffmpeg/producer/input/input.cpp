@@ -80,7 +80,7 @@ struct input::impl : boost::noncopyable
 
 	executor													executor_;
 
-	explicit impl(const spl::shared_ptr<diagnostics::graph> graph, const std::wstring& url_or_file, bool loop, uint32_t in, uint32_t out, bool thumbnail_mode, const ffmpeg_options& vid_params)
+	explicit impl(const spl::shared_ptr<diagnostics::graph> graph, const std::wstring& url_or_file, bool loop, uint32_t in, uint32_t seek, uint32_t out, bool thumbnail_mode, const ffmpeg_options& vid_params)
 		: graph_(graph)
 		, format_context_(open_input(url_or_file, vid_params))
 		, filename_(url_or_file)
@@ -98,8 +98,8 @@ struct input::impl : boost::noncopyable
 		loop_			= loop;
 		buffer_size_	= 0;
 
-		if(in_ > 0)
-			queued_seek(in_);
+		if(seek > 0)
+			queued_seek(seek);
 
 		graph_->set_color("seek", diagnostics::color(1.0f, 0.5f, 0.0f));
 		graph_->set_color("buffer-count", diagnostics::color(0.7f, 0.4f, 0.4f));
@@ -376,8 +376,8 @@ struct input::impl : boost::noncopyable
 	}
 };
 
-input::input(const spl::shared_ptr<diagnostics::graph>& graph, const std::wstring& url_or_file, bool loop, uint32_t in, uint32_t out, bool thumbnail_mode, const ffmpeg_options& vid_params)
-	: impl_(new impl(graph, url_or_file, loop, in, out, thumbnail_mode, vid_params)){}
+input::input(const spl::shared_ptr<diagnostics::graph>& graph, const std::wstring& url_or_file, bool loop, uint32_t in, uint32_t seek, uint32_t out, bool thumbnail_mode, const ffmpeg_options& vid_params)
+	: impl_(new impl(graph, url_or_file, loop, in, seek, out, thumbnail_mode, vid_params)){}
 bool input::eof() const {return !impl_->executor_.is_running();}
 bool input::try_pop(std::shared_ptr<AVPacket>& packet){return impl_->try_pop(packet);}
 bool input::buffer_empty() const { return impl_->empty(); }
