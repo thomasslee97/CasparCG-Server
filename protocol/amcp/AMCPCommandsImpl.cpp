@@ -492,7 +492,8 @@ std::wstring load_command(command_context& ctx)
     core::diagnostics::call_context::for_thread().layer         = ctx.layer_index();
     auto pFP = ctx.static_context->producer_registry->create_producer(
         get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
-    ctx.channel.stage->load(ctx.layer_index(), pFP, true);
+	auto pFP2 = create_transition_producer(ctx.channel.raw_channel->video_format_desc().field_mode, pFP, transition_info{});
+    ctx.channel.stage->load(ctx.layer_index(), pFP2, true);
 
     return L"202 LOAD OK\r\n";
 }

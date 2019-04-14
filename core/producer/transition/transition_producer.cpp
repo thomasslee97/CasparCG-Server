@@ -71,34 +71,45 @@ public:
             return dest_producer_->first_frame(); 
         }
 
+		draw_frame dest_ = draw_frame::empty();
+		draw_frame source_ = draw_frame::empty();
+
 	draw_frame receive_impl() override
 	{
-		if(current_frame_ >= info_.duration)
+		if (source_producer_ == core::frame_producer::empty())
+			return dest_producer_->receive();
+
+		if(current_frame_ >= info_.duration && info_.duration > 0)
 		{
 			source_producer_ = core::frame_producer::empty();
 			return dest_producer_->receive();
 		}
 
-		auto dest = draw_frame::empty();
-		auto source = draw_frame::empty();
-
 		tbb::parallel_invoke(
 		[&]
 		{
-			dest = dest_producer_->receive();
-			if(dest == core::draw_frame::late())
-				dest = dest_producer_->last_frame();
+			if (dest_ == core::draw_frame::empty()) {
+				dest_ = dest_producer_->receive();
+				if (dest_ == core::draw_frame::late())
+					dest_ = dest_producer_->last_frame();
+			}
 		},
 		[&]
 		{
-			source = source_producer_->receive();
-			if(source == core::draw_frame::late())
-				source = source_producer_->last_frame();
+			if (source_ == core::draw_frame::empty()) {
+				source_ = source_producer_->receive();
+				if (source_ == core::draw_frame::late())
+					source_ = source_producer_->last_frame();
+			}
 		});
 
-                if (dest == draw_frame::empty() || dest == draw_frame{}) {
-                    return source;
-                }
+        if (dest_ == draw_frame::empty() || dest_ == draw_frame{}) {
+            return source_;
+        }
+
+		if (info_.duration == 0) {
+			source_producer_ = core::frame_producer::empty();
+		}
 
                 current_frame_ += 1;
 
@@ -116,7 +127,10 @@ public:
 																	}
 																}();
 
-		return compose(dest, source);
+		auto res = compose(dest_, source_);
+		dest_ = draw_frame::empty();
+		source_ = draw_frame::empty();
+		return res;
 	}
 
 	draw_frame last_frame() override
