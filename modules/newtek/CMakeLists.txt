@@ -2,23 +2,46 @@ cmake_minimum_required (VERSION 2.6)
 project (newtek)
 
 set(SOURCES
-		consumer/newtek_ivga_consumer.cpp
+		consumer/newtek_ndi_consumer.cpp
 
-		util/air_send.cpp
+		producer/newtek_ndi_producer.cpp
+
+		util/ndi.cpp
 
 		newtek.cpp
 
 		StdAfx.cpp
 )
 set(HEADERS
-		consumer/newtek_ivga_consumer.h
+		consumer/newtek_ndi_consumer.h
 
-		util/air_send.h
+		producer/newtek_ndi_producer.h
+
+		util/ndi.h
 
 		newtek.h
 
+		interop/Processing.NDI.compat.h
+		interop/Processing.NDI.deprecated.h
+		interop/Processing.NDI.DynamicLoad.h
+		interop/Processing.NDI.Find.h
+		interop/Processing.NDI.FrameSync.h
+		interop/Processing.NDI.Lib.cplusplus.h
+		interop/Processing.NDI.Lib.h
+		interop/Processing.NDI.Recv.ex.h
+		interop/Processing.NDI.Recv.h
+		interop/Processing.NDI.Routing.h
+		interop/Processing.NDI.Send.h
+		interop/Processing.NDI.structs.h
+		interop/Processing.NDI.utilities.h
+
 		StdAfx.h
 )
+
+if (MSVC)
+	list(APPEND SOURCES util/air_send.cpp consumer/newtek_ivga_consumer.cpp)
+	list(APPEND HEADERS util/air_send.h consumer/newtek_ivga_consumer.h)
+endif()
 
 add_library(newtek ${SOURCES} ${HEADERS})
 add_precompiled_header(newtek StdAfx.h FORCEINCLUDE)
