@@ -49,7 +49,10 @@
 
 #include <tbb/parallel_for.h>
 
-// #include <ffmpeg/util/av_util.h>
+#include "../../ffmpeg/producer/filter/filter.h"
+#include "../../ffmpeg/producer/muxer/display_mode.h"
+#include "../../ffmpeg/producer/muxer/frame_muxer.h"
+#include "../../ffmpeg/producer/util/util.h"
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -57,6 +60,7 @@
 #endif
 extern "C" {
 // #include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
 }
 #ifdef _MSC_VER
 #pragma warning(pop)
@@ -75,7 +79,8 @@ class newtek_ndi_producer final : public core::frame_producer_base
 
 	core::monitor::subject				monitor_subject_;
 	spl::shared_ptr<core::frame_factory> frame_factory_;
-    core::video_format_desc              format_desc_;
+	core::video_format_desc              format_desc_;
+	core::audio_channel_layout           channel_layout_;
 	core::constraints constraints_{ format_desc_.width, format_desc_.height };
 	NDIlib_v3*                           ndi_lib_;
     NDIlib_framesync_instance_t          ndi_framesync_;
@@ -95,9 +100,11 @@ class newtek_ndi_producer final : public core::frame_producer_base
   public:
     explicit newtek_ndi_producer(spl::shared_ptr<core::frame_factory> frame_factory,
                                  core::video_format_desc              format_desc,
+                                 const core::audio_channel_layout&    channel_layout,
                                  std::wstring                         name,
                                  bool                                 low_bandwidth)
         : format_desc_(format_desc)
+		, channel_layout_(channel_layout)
         , frame_factory_(frame_factory)
         , name_(name)
         , low_bandwidth_(low_bandwidth)
@@ -164,72 +171,83 @@ class newtek_ndi_producer final : public core::frame_producer_base
     }
     bool prepare_next_frame()
     {
-        //try {
-        //    frame_timer_.restart();
-        //    NDIlib_video_frame_v2_t video_frame;
-        //    NDIlib_audio_frame_v2_t audio_frame;
-        //    ndi_lib_->NDIlib_framesync_capture_video(
-        //        ndi_framesync_, &video_frame, NDIlib_frame_format_type_progressive);
-        //    ndi_lib_->NDIlib_framesync_capture_audio(ndi_framesync_,
-        //                                             &audio_frame,
-        //                                             format_desc_.audio_sample_rate,
-        //                                             format_desc_.audio_channels,
-        //                                             format_desc_.audio_cadence[++cadence_counter_ %= cadence_length_]);
-        //    if (video_frame.p_data != nullptr) {
-        //        std::shared_ptr<AVFrame> av_frame(av_frame_alloc(), [](AVFrame* frame) { av_frame_free(&frame); });
-        //        std::shared_ptr<AVFrame> a_frame(av_frame_alloc(), [](AVFrame* frame) { av_frame_free(&frame); });
-        //        av_frame->data[0]     = video_frame.p_data;
-        //        av_frame->linesize[0] = video_frame.line_stride_in_bytes;
-        //        switch (video_frame.FourCC) {
-        //            case NDIlib_FourCC_type_BGRA:
-        //                av_frame->format = AV_PIX_FMT_BGRA;
-        //                break;
-        //            case NDIlib_FourCC_type_BGRX:
-        //                av_frame->format = AV_PIX_FMT_BGRA;
-        //                break;
-        //            case NDIlib_FourCC_type_RGBA:
-        //                av_frame->format = AV_PIX_FMT_RGBA;
-        //                break;
-        //            case NDIlib_FourCC_type_RGBX:
-        //                av_frame->format = AV_PIX_FMT_RGBA;
-        //                break;
-        //            default: // should never happen because library handles the conversion for us
-        //                av_frame->format = AV_PIX_FMT_BGRA;
-        //                break;
-        //        }
-        //        av_frame->width  = video_frame.xres;
-        //        av_frame->height = video_frame.yres;
-        //        NDIlib_audio_frame_interleaved_32s_t audio_frame_32s;
-        //        audio_frame_32s.p_data = new int32_t[audio_frame.no_samples * audio_frame.no_channels];
-        //        if (audio_frame.p_data != nullptr) {
-        //            audio_frame_32s.reference_level = 0;
-        //            ndi_lib_->NDIlib_util_audio_to_interleaved_32s_v2(&audio_frame, &audio_frame_32s);
-        //            a_frame->channels    = audio_frame_32s.no_channels;
-        //            a_frame->sample_rate = audio_frame_32s.sample_rate;
-        //            a_frame->nb_samples  = audio_frame_32s.no_samples;
-        //            a_frame->data[0]     = reinterpret_cast<uint8_t*>(audio_frame_32s.p_data);
-        //        }
-        //        ndi_lib_->NDIlib_framesync_free_audio(ndi_framesync_, &audio_frame);
-        //        auto mframe =
-        //            ffmpeg::make_frame(this, *(frame_factory_.get()), std::move(av_frame), std::move(a_frame));
-        //        ndi_lib_->NDIlib_framesync_free_video(ndi_framesync_, &video_frame);
-        //        delete[] audio_frame_32s.p_data;
-        //        auto dframe = core::draw_frame(std::move(mframe));
-        //        {
-        //            std::lock_guard<std::mutex> lock(frames_mutex_);
-        //            frames_.push(dframe);
-        //            while (frames_.size() > 2) { // should never happen because frame sync takes care of it
-        //                frames_.pop();
-        //                graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
-        //            }
-        //        }
-        //    }
+        try {
+            frame_timer_.restart();
+            NDIlib_video_frame_v2_t video_frame;
+            NDIlib_audio_frame_v2_t audio_frame;
+			const auto field_mode = format_desc_.field_count == 2 ? NDIlib_frame_format_type_interleaved : NDIlib_frame_format_type_progressive;
+            ndi_lib_->NDIlib_framesync_capture_video(ndi_framesync_, &video_frame, field_mode);
+            ndi_lib_->NDIlib_framesync_capture_audio(ndi_framesync_,
+                                                     &audio_frame,
+                                                     format_desc_.audio_sample_rate,
+                                                     channel_layout_.num_channels,
+                                                     format_desc_.audio_cadence[++cadence_counter_ %= cadence_length_]);
 
-        //    graph_->set_value("frame-time", frame_timer_.elapsed() * format_desc_.fps * 0.5);
-        //} catch (...) {
-        //    CASPAR_LOG_CURRENT_EXCEPTION();
-        //    return false;
-        //}
+			if (video_frame.p_data != nullptr) {
+				auto av_frame = ffmpeg::create_frame();
+
+				av_frame->data[0] = reinterpret_cast<uint8_t*>(video_frame.p_data);
+				av_frame->linesize[0] = video_frame.line_stride_in_bytes;
+				switch (video_frame.FourCC) {
+					case NDIlib_FourCC_type_BGRA:
+						av_frame->format = AV_PIX_FMT_BGRA;
+						break;
+					case NDIlib_FourCC_type_BGRX:
+						av_frame->format = AV_PIX_FMT_BGRA;
+						break;
+					case NDIlib_FourCC_type_RGBA:
+						av_frame->format = AV_PIX_FMT_RGBA;
+						break;
+					case NDIlib_FourCC_type_RGBX:
+						av_frame->format = AV_PIX_FMT_RGBA;
+						break;
+					default: // should never happen because library handles the conversion for us
+						av_frame->format = AV_PIX_FMT_BGRA;
+						break;
+				}
+				av_frame->width = video_frame.xres;
+				av_frame->height = video_frame.yres;
+				av_frame->interlaced_frame = format_desc_.field_mode != core::field_mode::progressive;
+				av_frame->top_field_first = format_desc_.field_mode == core::field_mode::upper ? 1 : 0;
+				
+				core::mutable_audio_buffer audio_buffer;
+				NDIlib_audio_frame_interleaved_32s_t audio_frame_32s;
+				audio_frame_32s.p_data = new int32_t[audio_frame.no_samples * audio_frame.no_channels];
+				if (audio_frame.p_data != nullptr) {
+					audio_frame_32s.reference_level = 0;
+					ndi_lib_->NDIlib_util_audio_to_interleaved_32s_v2(&audio_frame, &audio_frame_32s);
+
+					auto sample_frame_count = audio_frame_32s.no_samples;
+					auto audio_data = reinterpret_cast<int32_t*>(audio_frame_32s.p_data);
+
+					audio_buffer = core::mutable_audio_buffer(
+						audio_data, audio_data + sample_frame_count * audio_frame_32s.no_channels);
+				} else {
+					audio_buffer = core::mutable_audio_buffer(
+						format_desc_.audio_cadence[cadence_counter_ %= cadence_length_] * channel_layout_.num_channels, 0);
+				}
+				ndi_lib_->NDIlib_framesync_free_audio(ndi_framesync_, &audio_frame);
+				auto mframe = ffmpeg::make_frame(this, av_frame, *(frame_factory_.get()), channel_layout_);
+				mframe.audio_data() = audio_buffer;
+				ndi_lib_->NDIlib_framesync_free_video(ndi_framesync_, &video_frame);
+				delete[] audio_frame_32s.p_data;
+
+                auto dframe = core::draw_frame(std::move(mframe));
+                {
+                    std::lock_guard<std::mutex> lock(frames_mutex_);
+                    frames_.push(dframe);
+                    while (frames_.size() > 2) { // should never happen because frame sync takes care of it
+                        frames_.pop();
+                        graph_->set_tag(diagnostics::tag_severity::WARNING, "dropped-frame");
+                    }
+                }
+            }
+
+            graph_->set_value("frame-time", frame_timer_.elapsed() * format_desc_.fps * 0.5);
+        } catch (...) {
+            CASPAR_LOG_CURRENT_EXCEPTION();
+            return false;
+        }
         return true;
     }
 
@@ -295,8 +313,20 @@ spl::shared_ptr<core::frame_producer> create_ndi_producer(const core::frame_prod
     }
     const bool low_bandwidth = contains_param(L"LOW_BANDWIDTH", params);
 
+	auto channel_layout_spec = get_param(L"CHANNEL_LAYOUT", params);
+	auto channel_layout = *core::audio_channel_layout_repository::get_default()->get_layout(L"stereo");
+
+	if (!channel_layout_spec.empty()) {
+		auto found_layout = core::audio_channel_layout_repository::get_default()->get_layout(channel_layout_spec);
+
+		if (!found_layout)
+			CASPAR_THROW_EXCEPTION(user_error() << msg_info(L"Channel layout not found."));
+
+		channel_layout = *found_layout;
+	}
+
     auto producer = spl::make_shared<newtek_ndi_producer>(
-        dependencies.frame_factory, dependencies.format_desc, name_or_url, low_bandwidth);
+        dependencies.frame_factory, dependencies.format_desc, channel_layout, name_or_url, low_bandwidth);
     return core::create_destroy_proxy(std::move(producer));
 }
 }} // namespace caspar::newtek
