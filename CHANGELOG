@@ -1,5 +1,11 @@
 C H A N G E S
 
+CasparCG 2.1.7 NRK (w.r.t 2.1.6 NRK)
+==========================================
+
+  o Allow both SEEK and IN to be specified for media. This allows for looping between 2 points, while starting from a another
+  o Fix black frames when playing or loading a clip with no transition
+
 CasparCG 2.1.6 NRK (w.r.t 2.1.5 NRK)
 ==========================================
 
