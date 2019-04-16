@@ -109,6 +109,7 @@ public:
 
 		if (info_.duration == 0) {
 			source_producer_ = core::frame_producer::empty();
+			return dest_;
 		}
 
                 current_frame_ += 1;
