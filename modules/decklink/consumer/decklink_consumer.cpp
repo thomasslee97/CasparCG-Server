@@ -305,13 +305,13 @@ class decklink_frame : public IDeckLinkVideoFrame
         // TODO - handle drop frame
 
         if (format == bmdTimecodeRP188VITC2 || format == bmdTimecodeVITCField2) {
-			// TODO - this is leaking?
             *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault | bmdTimecodeFieldMark);
+			(*timecode)->AddRef();
             return S_OK;
         }
 
-		// TODO - this is leaking?
         *timecode = new decklink_timecode(timecode_, bmdTimecodeFlagDefault);
+		(*timecode)->AddRef();
         return S_OK;
     }
 
