@@ -1,5 +1,10 @@
 C H A N G E S
 
+CasparCG 2.1.8 NRK (w.r.t 2.1.7 NRK)
+==========================================
+
+  o Fix memory leak in decklink outputs
+
 CasparCG 2.1.7 NRK (w.r.t 2.1.6 NRK)
 ==========================================
 
