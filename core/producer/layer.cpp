@@ -38,6 +38,7 @@ struct layer::impl
 {
 	int									index_;
 	spl::shared_ptr<monitor::subject>	monitor_subject_;
+	tweened_transform					tween_;
 	spl::shared_ptr<frame_producer>		foreground_			= frame_producer::empty();
 	spl::shared_ptr<frame_producer>		background_			= frame_producer::empty();;
 	bool                                auto_play_          = false;
@@ -138,7 +139,7 @@ public:
             }
         }
 
-	draw_frame receive(const video_format_desc& format_desc)
+	std::pair<draw_frame, draw_frame> receive(const video_format_desc& format_desc)
 	{
 		try
 		{
@@ -150,22 +151,47 @@ public:
 
 			*monitor_subject_ << monitor::message("/profiler/time") % produce_time % (1.0 / format_desc.fps);
 
-			if(frame == core::draw_frame::late())
-				return foreground_->last_frame();
-
-			if (auto_play_)
-			{
-                auto auto_play_delta = background_->auto_play_delta();
-                if (auto_play_delta)
+			if (frame == core::draw_frame::late()) {
+				frame = foreground_->last_frame();
+			} else {
+				if (auto_play_)
 				{
-					auto frames_left = static_cast<int64_t>(foreground_->nb_frames()) - foreground_->frame_number() - static_cast<int64_t>(*auto_play_delta);
-					if(frames_left < 1)
+					auto auto_play_delta = background_->auto_play_delta();
+					if (auto_play_delta)
 					{
-						play();
-						return receive(format_desc);
+						auto frames_left = static_cast<int64_t>(foreground_->nb_frames()) - foreground_->frame_number() - static_cast<int64_t>(*auto_play_delta);
+						if (frames_left < 1)
+						{
+							play();
+							return receive(format_desc);
+						}
 					}
 				}
+
+				current_frame_age_ = frame.get_and_record_age_millis();
 			}
+
+			auto transformed_frame = frame;
+
+			// Apply transform tween to a copy of the frame
+			auto transform = tween_.fetch_and_tick(1);
+			transformed_frame.transform() *= transform;
+			if (format_desc.field_mode != core::field_mode::progressive) {
+				auto frame2 = frame;
+				frame2.transform() *= tween_.fetch_and_tick(1);
+				frame2.transform().audio_transform.volume = 0.0;
+				transformed_frame = core::draw_frame::interlace(transformed_frame, frame2, format_desc.field_mode);
+			}
+
+			*monitor_subject_ << core::monitor::message("/transform/tween/duration") % tween_.duration()
+				<< core::monitor::message("/transform/tween/remaining") % tween_.remaining()
+				<< core::monitor::message("/transform/audio/volume") % transform.audio_transform.volume
+				<< core::monitor::message("/transform/video/opacity") % transform.image_transform.opacity
+				<< core::monitor::message("/transform/video/contrast") % transform.image_transform.contrast
+				<< core::monitor::message("/transform/video/brightness") % transform.image_transform.brightness
+				<< core::monitor::message("/transform/video/saturation") % transform.image_transform.saturation;
+
+			// TODO - finish properties
 
 			//event_subject_	<< monitor::event("time")	% monitor::duration(foreground_->frame_number()/format_desc.fps)
 			//											% monitor::duration(static_cast<int64_t>(foreground_->nb_frames()) - static_cast<int64_t>(auto_play_delta_ ? *auto_play_delta_ : 0)/format_desc.fps)
@@ -175,15 +201,14 @@ public:
 			//foreground_event_subject_ << monitor::event("type") % foreground_->name();
 			//background_event_subject_ << monitor::event("type") % background_->name();
 
-			current_frame_age_ = frame.get_and_record_age_millis();
 
-			return frame;
+			return std::make_pair(frame, transformed_frame);
 		}
 		catch(...)
 		{
 			CASPAR_LOG_CURRENT_EXCEPTION();
 			stop();
-			return core::draw_frame::empty();
+			return std::make_pair(core::draw_frame::empty(), core::draw_frame::empty());
 		}
 	}
 
@@ -202,6 +227,35 @@ public:
 		info.add(L"frame-age", current_frame_age_);
 		info.add_child(L"foreground.producer", foreground_->info());
 		info.add_child(L"background.producer", background_->info());
+
+		info.add_child(L"transform", frame_transform_to_tree());
+
+		return info;
+	}
+
+	boost::property_tree::wptree frame_transform_to_tree() const {
+		auto transform = tween_.fetch();
+
+		boost::property_tree::wptree tween_info;
+		tween_info.add(L"duration", tween_.duration());
+		tween_info.add(L"remaining", tween_.remaining());
+
+		boost::property_tree::wptree audio_info;
+		audio_info.add(L"volume", transform.audio_transform.volume);
+		
+		boost::property_tree::wptree video_info;
+		video_info.add(L"opacity", transform.image_transform.opacity);
+		video_info.add(L"contrast", transform.image_transform.contrast);
+		video_info.add(L"brightness", transform.image_transform.brightness);
+		video_info.add(L"saturation", transform.image_transform.saturation);
+
+		// TODO - finish properties
+
+		boost::property_tree::wptree info;
+		info.add_child(L"tween", tween_info);
+		info.add_child(L"audio", audio_info);
+		info.add_child(L"video", video_info);
+
 		return info;
 	}
 
@@ -244,10 +298,12 @@ void layer::play(){impl_->play();}
 void layer::pause(){impl_->pause();}
 void layer::resume(){impl_->resume();}
 void layer::stop(){impl_->stop();}
-draw_frame layer::receive(const video_format_desc& format_desc) { return impl_->receive(format_desc); }
+std::pair<draw_frame, draw_frame> layer::receive(const video_format_desc& format_desc) { return impl_->receive(format_desc); }
 draw_frame layer::receive_background() { return impl_->receive_background(); }
 spl::shared_ptr<frame_producer> layer::foreground() const { return impl_->foreground_;}
 spl::shared_ptr<frame_producer> layer::background() const { return impl_->background_;}
+tweened_transform& layer::tween() const { return impl_->tween_; }
+void layer::tween(tweened_transform new_tween) { impl_->tween_ = new_tween; }
 bool layer::has_background() const { return impl_->background_ != frame_producer::empty(); }
 boost::property_tree::wptree layer::info() const{return impl_->info();}
 boost::property_tree::wptree layer::delay_info() const{return impl_->delay_info();}

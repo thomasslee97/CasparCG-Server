@@ -54,7 +54,6 @@ struct stage::impl : public std::enable_shared_from_this<impl>
     spl::shared_ptr<diagnostics::graph> graph_;
     spl::shared_ptr<monitor::subject>   monitor_subject_ = spl::make_shared<monitor::subject>("/stage");
     std::map<int, layer>                layers_;
-    std::map<int, tweened_transform>    tweens_;
     interaction_aggregator              aggregator_;
     
     // map of layer -> map of tokens (src ref) -> layer_consumer
@@ -99,7 +98,6 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                     for (auto& layer : layers_) {
                         // Prevent race conditions in parallel for each later
                         frames[layer.first] = draw_frame::empty();
-                        tweens_[layer.first];
                         layer_consumers_[layer.first];
 
                         indices.push_back(layer.first);
@@ -114,7 +112,6 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                             continue;
 
                         frames[consumers.first] = draw_frame::empty();
-                        tweens_[consumers.first];
                         layer_consumers_[consumers.first];
 
                         indices.push_back(consumers.first);
@@ -144,10 +141,9 @@ struct stage::impl : public std::enable_shared_from_this<impl>
     void draw(int index, const video_format_desc& format_desc, std::map<int, draw_frame>& frames)
     {
         auto& layer     = layers_[index];
-        auto& tween     = tweens_[index];
         auto& consumers = layer_consumers_[index];
 
-        auto frame = layer.receive(format_desc);
+        auto frame = layer.receive(format_desc); // { frame, transformed_frame }
 
         if (!consumers.empty()) {
             auto consumer_it = consumers | boost::adaptors::map_values;
@@ -161,22 +157,11 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                 if (c.first == core::frame_consumer_mode::background || (c.first == core::frame_consumer_mode::next_producer && has_bg))
                     c.second->send(frame_bg);
                 else
-                    c.second->send(frame);
+                    c.second->send(frame.first);
             });
         }
 
-        auto frame1 = frame;
-
-        frame1.transform() *= tween.fetch_and_tick(1);
-
-        if (format_desc.field_mode != core::field_mode::progressive) {
-            auto frame2 = frame;
-            frame2.transform() *= tween.fetch_and_tick(1);
-            frame2.transform().audio_transform.volume = 0.0;
-            frame1 = core::draw_frame::interlace(frame1, frame2, format_desc.field_mode);
-        }
-
-        frames[index] = frame1;
+        frames[index] = frame.second;
     }
 
     std::future<void>
@@ -185,11 +170,11 @@ struct stage::impl : public std::enable_shared_from_this<impl>
         return executor_.begin_invoke(
             [=] {
                 for (auto& transform : transforms) {
-                    auto& tween = tweens_[std::get<0>(transform)];
+					auto& layer = get_layer(std::get<0>(transform));
+					auto& tween = layer.tween();
                     auto  src   = tween.fetch();
                     auto  dst   = std::get<1>(transform)(tween.dest());
-                    tweens_[std::get<0>(transform)] =
-                        tweened_transform(src, dst, std::get<2>(transform), std::get<3>(transform));
+					layer.tween(tweened_transform(src, dst, std::get<2>(transform), std::get<3>(transform)));
                 }
             },
             task_priority::high_priority);
@@ -202,26 +187,36 @@ struct stage::impl : public std::enable_shared_from_this<impl>
     {
         return executor_.begin_invoke(
             [=] {
-                auto src       = tweens_[index].fetch();
-                auto dst       = transform(src);
-                tweens_[index] = tweened_transform(src, dst, mix_duration, tween);
+				auto& layer = get_layer(index);
+				auto src = layer.tween().fetch();
+                auto dst = transform(src);
+				layer.tween(tweened_transform(src, dst, mix_duration, tween));
             },
             task_priority::high_priority);
     }
 
     std::future<void> clear_transforms(int index)
     {
-        return executor_.begin_invoke([=] { tweens_.erase(index); }, task_priority::high_priority);
+		return executor_.begin_invoke([=] {
+			auto& layer = get_layer(index);
+			layer.tween(tweened_transform());
+		}, task_priority::high_priority);
     }
 
     std::future<void> clear_transforms()
     {
-        return executor_.begin_invoke([=] { tweens_.clear(); }, task_priority::high_priority);
+        return executor_.begin_invoke([=] {
+			for (auto& layer : layers_ | boost::adaptors::map_values)
+				layer.tween(tweened_transform());
+		}, task_priority::high_priority);
     }
 
     std::future<frame_transform> get_current_transform(int index)
     {
-        return executor_.begin_invoke([=] { return tweens_[index].fetch(); }, task_priority::high_priority);
+        return executor_.begin_invoke([=] {
+			auto& layer = get_layer(index);
+			return layer.tween().fetch();
+		}, task_priority::high_priority);
     }
 
     std::future<void> load(int                                    index,
@@ -289,8 +284,20 @@ struct stage::impl : public std::enable_shared_from_this<impl>
             for (auto& layer : other_layers)
                 layer.monitor_output().attach_parent(monitor_subject_);
 
-            if (swap_transforms)
-                std::swap(tweens_, other_impl->tweens_);
+			// Swap tweens back as they live in the layer
+			if (!swap_transforms) {
+				std::set<int> layer_ids;
+				boost::copy(layers_ | boost::adaptors::map_keys, std::inserter(layer_ids, layer_ids.begin()));
+				boost::copy(other_impl->layers_ | boost::adaptors::map_keys, std::inserter(layer_ids, layer_ids.begin()));
+
+				for (auto index : layer_ids){
+					std::swap(get_layer(index).tween(), other_impl->get_layer(index).tween());
+				}
+			}
+			
+
+            //if (!swap_transforms) // TODO
+                //std::swap(tweens_, other_impl->tweens_);
         };
 
         return invoke_both(other, func);
@@ -300,10 +307,13 @@ struct stage::impl : public std::enable_shared_from_this<impl>
     {
         return executor_.begin_invoke(
             [=] {
-                std::swap(get_layer(index), get_layer(other_index));
+				auto& layer = get_layer(index);
+				auto& other_layer = get_layer(other_index);
+                std::swap(layer, other_layer);
 
-                if (swap_transforms)
-                    std::swap(tweens_[index], tweens_[other_index]);
+				// Swap tweens back as they live in the layer
+                if (!swap_transforms)
+                    std::swap(layer.tween(), other_layer.tween());
             },
             task_priority::high_priority);
     }
@@ -327,9 +337,10 @@ struct stage::impl : public std::enable_shared_from_this<impl>
                 my_layer.monitor_output().attach_parent(monitor_subject_);
                 other_layer.monitor_output().attach_parent(other_impl->monitor_subject_);
 
-                if (swap_transforms) {
-                    auto& my_tween    = tweens_[index];
-                    auto& other_tween = other_impl->tweens_[other_index];
+				// Swap tweens back as they live in the layer
+                if (!swap_transforms) {
+                    auto& my_tween    = my_layer.tween();
+					auto& other_tween = other_layer.tween();
                     std::swap(my_tween, other_tween);
                 }
             };
@@ -436,7 +447,7 @@ struct stage::impl : public std::enable_shared_from_this<impl>
     boost::optional<interaction_target> collission_detect(double x, double y)
     {
         for (auto& layer : layers_ | boost::adaptors::reversed) {
-            auto transform  = tweens_[layer.first].fetch();
+            auto transform  = layer.second.tween().fetch();
             auto translated = translate(x, y, transform);
 
             if (translated.first >= 0.0 && translated.first <= 1.0 && translated.second >= 0.0 &&

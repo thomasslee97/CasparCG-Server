@@ -177,7 +177,7 @@ public:
 		return dest_;
 	}
 
-	frame_transform fetch()
+	frame_transform fetch() const
 	{
 		return time_ == duration_ ? dest_ : frame_transform::tween(static_cast<double>(time_), source_, dest_, static_cast<double>(duration_), tweener_);
 	}
@@ -186,6 +186,13 @@ public:
 	{
 		time_ = std::min(time_+num, duration_);
 		return fetch();
+	}
+
+	int duration() const {
+		return duration_;
+	}
+	int remaining() const {
+		return duration_ - time_;
 	}
 };
 

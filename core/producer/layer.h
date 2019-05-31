@@ -61,7 +61,7 @@ public:
 	void resume();
 	void stop();
 	
-	draw_frame receive(const video_format_desc& format_desc);
+	std::pair<draw_frame, draw_frame> receive(const video_format_desc& format_desc);
         draw_frame receive_background();
 	
 	// monitor::observable
@@ -77,7 +77,9 @@ public:
 		
 	spl::shared_ptr<frame_producer>	foreground() const; 
 	spl::shared_ptr<frame_producer>	background() const; 
-        bool has_background() const;
+	tweened_transform&	tween() const;
+	void tween(tweened_transform new_tween);
+    bool has_background() const;
 
 	boost::property_tree::wptree	info() const;
 	boost::property_tree::wptree	delay_info() const;
