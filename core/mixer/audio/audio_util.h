@@ -26,6 +26,10 @@
 #include <cstdint>
 
 #include <common/cache_aligned_vector.h>
+#include "core/frame/frame.h"
+#include "core/monitor/monitor.h"
+
+#include <boost/lexical_cast.hpp>
 
 namespace caspar { namespace core {
 	
@@ -60,5 +64,10 @@ cache_aligned_vector<int16_t> audio_32_to_16(const T& audio_data)
 
 	return output16;
 }
+
+
+std::vector<int32_t> audio_max_level_for_frame(const int num_channels, const int32_t* result, const size_t size);
+
+void output_audio_levels(monitor::subject& monitor_subject, const std::vector<int32_t> max_values);
 
 }}

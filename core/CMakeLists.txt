@@ -22,8 +22,9 @@ set(SOURCES
 
 		help/help_repository.cpp
 		help/util.cpp
-
+		
 		mixer/audio/audio_mixer.cpp
+		mixer/audio/audio_util.cpp
 		mixer/image/blend_modes.cpp
 		mixer/mixer.cpp
 
@@ -93,8 +94,9 @@ set(HEADERS
 		interaction/interaction_event.h
 		interaction/interaction_sink.h
 		interaction/util.h
-
+		
 		mixer/audio/audio_mixer.h
+		mixer/audio/audio_util.h
 
 		mixer/image/blend_modes.h
 

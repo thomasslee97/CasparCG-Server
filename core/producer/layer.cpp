@@ -26,13 +26,51 @@
 #include "frame_producer.h"
 
 #include "../video_format.h"
+#include "../frame/audio_channel_layout.h"
 #include "../frame/draw_frame.h"
+#include "../frame/frame.h"
 #include "../frame/frame_transform.h"
+#include "../mixer/audio/audio_util.h"
 
 #include <boost/optional.hpp>
 #include <boost/thread/future.hpp>
 
 namespace caspar { namespace core {
+
+const_frame get_first_frame_with_audio(draw_frame& frame) {
+	struct audio_extractor : public frame_visitor
+	{
+		std::stack<core::audio_transform> transform_stack_;
+		const_frame audio_frame_;
+	public:
+		audio_extractor()
+			: audio_frame_(const_frame::empty())
+		{
+			transform_stack_.push(audio_transform());
+		}
+
+		void push(const frame_transform& transform) override
+		{
+			transform_stack_.push(transform_stack_.top() * transform.audio_transform);
+		}
+
+		void pop() override
+		{
+			transform_stack_.pop();
+		}
+
+		void visit(const const_frame& frame) override
+		{
+			if (!frame.audio_data().empty() && !transform_stack_.top().is_still && transform_stack_.top().volume > 0.002 && audio_frame_ == const_frame::empty())
+				audio_frame_ = frame;
+		}
+	};
+
+	audio_extractor extractor;
+	frame.accept(extractor);
+
+	return extractor.audio_frame_;
+}
 
 struct layer::impl
 {
@@ -193,6 +231,13 @@ public:
 
 			// TODO - finish properties
 
+			// Layer audio levels
+			auto best_audio_frame = get_first_frame_with_audio(frame);
+			monitor::subject audio_subject = { "/audio" };
+			audio_subject.attach_parent(monitor_subject_);
+			auto max_levels = audio_max_level_for_frame(best_audio_frame.audio_channel_layout().num_channels, best_audio_frame.audio_data().data(), best_audio_frame.audio_data().size());
+			output_audio_levels(audio_subject, max_levels);
+
 			//event_subject_	<< monitor::event("time")	% monitor::duration(foreground_->frame_number()/format_desc.fps)
 			//											% monitor::duration(static_cast<int64_t>(foreground_->nb_frames()) - static_cast<int64_t>(auto_play_delta_ ? *auto_play_delta_ : 0)/format_desc.fps)
 			//				<< monitor::event("frame")	% static_cast<int64_t>(foreground_->frame_number())
@@ -277,6 +322,7 @@ public:
 		return foreground_->collides(x, y);
 	}
 };
+
 
 layer::layer(int index) : impl_(new impl(index)){}
 layer::layer(layer&& other) : impl_(std::move(other.impl_)){}

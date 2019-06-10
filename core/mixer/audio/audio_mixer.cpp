@@ -22,6 +22,7 @@
 #include "../../StdAfx.h"
 
 #include "audio_mixer.h"
+#include "audio_util.h"
 
 #include <core/frame/frame.h>
 #include <core/frame/frame_transform.h>
@@ -292,26 +293,8 @@ public:
 		const int num_channels = channel_layout_.num_channels;
 		monitor_subject_ << monitor::message("/nb_channels") % num_channels;
 
-		auto max = std::vector<int32_t>(num_channels, std::numeric_limits<int32_t>::min());
-
-		for (size_t n = 0; n < result.size(); n += num_channels)
-			for (int ch = 0; ch < num_channels; ++ch)
-				max[ch] = std::max(max[ch], std::abs(result[n + ch]));
-
-		// Makes the dBFS of silence => -dynamic range of 32bit LPCM => about -192 dBFS
-		// Otherwise it would be -infinity
-		static const auto MIN_PFS = 0.5f / static_cast<float>(std::numeric_limits<int32_t>::max());
-
-		for (int i = 0; i < num_channels; ++i)
-		{
-			const auto pFS = max[i] / static_cast<float>(std::numeric_limits<int32_t>::max());
-			const auto dBFS = 20.0f * std::log10(std::max(MIN_PFS, pFS));
-
-			auto chan_str = boost::lexical_cast<std::string>(i + 1);
-
-			monitor_subject_ << monitor::message("/" + chan_str + "/pFS") % pFS;
-			monitor_subject_ << monitor::message("/" + chan_str + "/dBFS") % dBFS;
-		}
+		auto max = audio_max_level_for_frame(num_channels, &result.at(0), result.size());
+		output_audio_levels(monitor_subject_, max);
 
 		graph_->set_value("volume", static_cast<double>(*boost::max_element(max)) / std::numeric_limits<int32_t>::max());
 
