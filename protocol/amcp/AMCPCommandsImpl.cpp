@@ -435,10 +435,26 @@ bool try_match_sting(const std::vector<std::wstring>& params, sting_info& stingI
 		stingInfo.mask_filename = val;
 
 		if (get_arg_value(args, L"trigger_point", val)) {
-			stingInfo.trigger_point = boost::lexical_cast<int>(val);
+			int val2 = boost::lexical_cast<int>(val);
+			if (val2 > 0) {
+				stingInfo.trigger_point = val2;
+			}
 		}
 		if (get_arg_value(args, L"overlay", val)) {
 			stingInfo.overlay_filename = val;
+		}
+
+		if (get_arg_value(args, L"audio_fade_start", val)) {
+			int val2 = boost::lexical_cast<int>(val);
+			if (val2 > 0) {
+				stingInfo.audio_fade_start = val2;
+			}
+		}
+		if (get_arg_value(args, L"audio_fade_duration", val)) {
+			int val2 = boost::lexical_cast<int>(val);
+			if (val2 > 0) {
+				stingInfo.audio_fade_duration = val2;
+			}
 		}
 
 	} else {
