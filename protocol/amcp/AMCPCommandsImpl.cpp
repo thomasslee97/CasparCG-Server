@@ -32,6 +32,8 @@
 #include "amcp_command_repository.h"
 #include "amcp_args.h"
 
+#include <accelerator/ogl/util/device.h>
+
 #include <common/env.h>
 
 #include <common/base64.h>
@@ -2940,7 +2942,6 @@ std::wstring diag_command(command_context& ctx)
     return L"202 DIAG OK\r\n";
 }
 
-/*
 void gl_info_describer(core::help_sink& sink, const core::help_repository& repo)
 {
     sink.short_description(L"Get information about the allocated and pooled OpenGL resources.");
@@ -2985,7 +2986,7 @@ std::wstring gl_gc_command(command_context& ctx)
     device->gc().wait();
 
     return L"202 GL GC OK\r\n";
-}*/
+}
 
 static const int WIDTH = 80;
 
@@ -3381,8 +3382,8 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_command(L"Query Commands", L"INFO THREADS", info_threads_describer, info_threads_command, 0);
     repo->register_channel_command(L"Query Commands", L"INFO DELAY", info_delay_describer, info_delay_command, 0);
     repo->register_command(L"Query Commands", L"DIAG", diag_describer, diag_command, 0);
-    // repo->register_command(L"Query Commands", L"GL INFO", gl_info_describer, gl_info_command, 0);
-    // repo->register_command(L"Query Commands", L"GL GC", gl_gc_describer, gl_gc_command, 0);
+    repo->register_command(L"Query Commands", L"GL INFO", gl_info_describer, gl_info_command, 0);
+    repo->register_command(L"Query Commands", L"GL GC", gl_gc_describer, gl_gc_command, 0);
     repo->register_command(L"Query Commands", L"BYE", bye_describer, bye_command, 0);
     repo->register_command(L"Query Commands", L"KILL", kill_describer, kill_command, 0);
     repo->register_command(L"Query Commands", L"RESTART", restart_describer, restart_command, 0);
