@@ -531,10 +531,16 @@ std::wstring load_command(command_context& ctx)
     core::diagnostics::scoped_call_context save;
     core::diagnostics::call_context::for_thread().video_channel = ctx.channel_index + 1;
     core::diagnostics::call_context::for_thread().layer         = ctx.layer_index();
-    auto pFP = ctx.static_context->producer_registry->create_producer(
-        get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
-	auto pFP2 = create_transition_producer(ctx.channel.raw_channel->video_format_desc().field_mode, pFP, transition_info{});
-    ctx.channel.stage->load(ctx.layer_index(), pFP2, true);
+
+	if (ctx.parameters.empty()) {
+		// Must be a promoting load
+		ctx.channel.stage->preview(ctx.layer_index());
+	} else {
+		auto pFP = ctx.static_context->producer_registry->create_producer(
+			get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
+		auto pFP2 = create_transition_producer(ctx.channel.raw_channel->video_format_desc().field_mode, pFP, transition_info{});
+		ctx.channel.stage->load(ctx.layer_index(), pFP2, true);
+	}
 
     return L"202 LOAD OK\r\n";
 }
@@ -3290,7 +3296,7 @@ void ping_describer(core::help_sink& sink, const core::help_repository& repo)
 void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
 {
     repo->register_channel_command(L"Basic Commands", L"LOADBG", loadbg_describer, loadbg_command, 1);
-    repo->register_channel_command(L"Basic Commands", L"LOAD", load_describer, load_command, 1);
+    repo->register_channel_command(L"Basic Commands", L"LOAD", load_describer, load_command, 0);
     repo->register_channel_command(L"Basic Commands", L"PLAY", play_describer, play_command, 0);
     repo->register_channel_command(L"Basic Commands", L"PAUSE", pause_describer, pause_command, 0);
     repo->register_channel_command(L"Basic Commands", L"RESUME", resume_describer, resume_command, 0);
