@@ -55,6 +55,7 @@
 #include <core/mixer/mixer.h>
 #include <core/producer/cg_proxy.h>
 #include <core/producer/frame_producer.h>
+#include <core/producer/color/color_producer.h>
 #include <core/producer/layer.h>
 #include <core/producer/media_info/media_info.h>
 #include <core/producer/media_info/media_info_repository.h>
@@ -483,32 +484,40 @@ std::wstring loadbg_command(command_context& ctx)
     core::diagnostics::call_context::for_thread().layer         = ctx.layer_index();
 
     auto channel = ctx.channel.raw_channel;
-    auto pFP =
-        ctx.static_context->producer_registry->create_producer(get_producer_dependencies(channel, ctx), ctx.parameters);
+	bool auto_play = contains_param(L"AUTO", ctx.parameters);
 
-    if (pFP == frame_producer::empty())
-        CASPAR_THROW_EXCEPTION(file_not_found() << msg_info(ctx.parameters.size() > 0 ? ctx.parameters[0] : L""));
+	try {
+		auto pFP =
+			ctx.static_context->producer_registry->create_producer(get_producer_dependencies(channel, ctx), ctx.parameters);
 
-    bool auto_play = contains_param(L"AUTO", ctx.parameters);
+		if (pFP == frame_producer::empty())
+			CASPAR_THROW_EXCEPTION(file_not_found() << msg_info(ctx.parameters.size() > 0 ? ctx.parameters[0] : L""));
 
-    spl::shared_ptr<frame_producer> transition_producer = frame_producer::empty();
-    transition_info                 transitionInfo;
-    sting_info                      stingInfo;
 
-    if (try_match_sting(ctx.parameters, stingInfo)) {
-        transition_producer = create_sting_producer(
-            get_producer_dependencies(channel, ctx), channel->video_format_desc().field_mode, pFP, stingInfo);
-    } else {
-        std::wstring message;
-        for (size_t n = 0; n < ctx.parameters.size(); ++n)
-            message += boost::to_upper_copy(ctx.parameters[n]) + L" ";
+		spl::shared_ptr<frame_producer> transition_producer = frame_producer::empty();
+		transition_info                 transitionInfo;
+		sting_info                      stingInfo;
 
-        // Always fallback to transition
-        try_match_transition(message, transitionInfo);
-        transition_producer = create_transition_producer(channel->video_format_desc().field_mode, pFP, transitionInfo);
-    }
+		if (try_match_sting(ctx.parameters, stingInfo)) {
+			transition_producer = create_sting_producer(
+				get_producer_dependencies(channel, ctx), channel->video_format_desc().field_mode, pFP, stingInfo);
+		} else {
+			std::wstring message;
+			for (size_t n = 0; n < ctx.parameters.size(); ++n)
+				message += boost::to_upper_copy(ctx.parameters[n]) + L" ";
 
-    ctx.channel.stage->load(ctx.layer_index(), transition_producer, false, auto_play); // TODO: LOOP
+			// Always fallback to transition
+			try_match_transition(message, transitionInfo);
+			transition_producer = create_transition_producer(channel->video_format_desc().field_mode, pFP, transitionInfo);
+		}
+
+		ctx.channel.stage->load(ctx.layer_index(), transition_producer, false, auto_play); // TODO: LOOP
+	} catch (file_not_found&) {
+		if (contains_param(L"CLEAR_ON_404", ctx.parameters)) {
+			ctx.channel.stage->load(ctx.layer_index(), core::create_color_producer(ctx.channel.raw_channel->frame_factory(), 0), false, auto_play);
+		}
+		throw;
+	}
 
     return L"202 LOADBG OK\r\n";
 }
@@ -536,10 +545,17 @@ std::wstring load_command(command_context& ctx)
 		// Must be a promoting load
 		ctx.channel.stage->preview(ctx.layer_index());
 	} else {
-		auto pFP = ctx.static_context->producer_registry->create_producer(
-			get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
-		auto pFP2 = create_transition_producer(ctx.channel.raw_channel->video_format_desc().field_mode, pFP, transition_info{});
-		ctx.channel.stage->load(ctx.layer_index(), pFP2, true);
+		try {
+			auto pFP = ctx.static_context->producer_registry->create_producer(
+				get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
+			auto pFP2 = create_transition_producer(ctx.channel.raw_channel->video_format_desc().field_mode, pFP, transition_info{});
+			ctx.channel.stage->load(ctx.layer_index(), pFP2, true);
+		} catch (file_not_found&) {
+			if (contains_param(L"CLEAR_ON_404", ctx.parameters)) {
+				ctx.channel.stage->load(ctx.layer_index(), core::create_color_producer(ctx.channel.raw_channel->frame_factory(), 0), true);
+			}
+			throw;
+		}
 	}
 
     return L"202 LOAD OK\r\n";
@@ -566,8 +582,15 @@ void play_describer(core::help_sink& sink, const core::help_repository& reposito
 
 std::wstring play_command(command_context& ctx)
 {
-    if (!ctx.parameters.empty())
-        loadbg_command(ctx);
+	try {
+		if (!ctx.parameters.empty())
+			loadbg_command(ctx);
+	} catch (file_not_found&) {
+		if (contains_param(L"CLEAR_ON_404", ctx.parameters)) {
+			ctx.channel.stage->play(ctx.layer_index());
+		}
+		throw;
+	}
 
     ctx.channel.stage->play(ctx.layer_index());
 
