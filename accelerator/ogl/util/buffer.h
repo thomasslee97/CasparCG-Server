@@ -53,8 +53,6 @@ public:
 
 	buffer& operator=(buffer&& other);
 
-	void invalidate() const;
-
 	void bind() const;
 	void unbind() const;
 

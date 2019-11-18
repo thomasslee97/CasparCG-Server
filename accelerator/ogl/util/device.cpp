@@ -297,7 +297,7 @@ struct device::impl : public std::enable_shared_from_this<impl>
 					CASPAR_SCOPED_CONTEXT_MSG(context);
 					strong->texture_cache_.erase(buf.get());
 					// Clear any previous data
-					buf->invalidate();
+					// TODO - does this want to clear the buffer?
 				}, task_priority::high_priority);
 				
 				pool->push(buf);

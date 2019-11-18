@@ -85,10 +85,6 @@ public:
 		(usage_ == GL_STREAM_DRAW ? g_w_total_count : g_r_total_count)	--;
 	}
 
-	void invalidate() {
-		GL(glInvalidateBufferData(pbo_));
-	}
-	
 	void bind()
 	{
 		GL(glBindBuffer(target_, pbo_));
@@ -105,7 +101,6 @@ buffer::buffer(buffer&& other) : impl_(std::move(other.impl_)){}
 buffer::~buffer(){}
 buffer& buffer::operator=(buffer&& other){impl_ = std::move(other.impl_); return *this;}
 uint8_t* buffer::data(){return impl_->data_;}
-void buffer::invalidate() const { impl_->invalidate(); }
 void buffer::bind() const { impl_->bind(); }
 void buffer::unbind() const{impl_->unbind();}
 std::size_t buffer::size() const { return impl_->size_; }
