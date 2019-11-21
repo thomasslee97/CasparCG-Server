@@ -60,6 +60,11 @@ public:
 
 	//std::future<std::shared_ptr<texture>>	copy_async(const array<std::uint8_t>& source, int width, int height, int stride, bool mipmapped);
 	std::future<array<const std::uint8_t>>	copy_async(const spl::shared_ptr<texture>& source);
+	
+#ifdef WIN32
+    std::shared_ptr<void>                 d3d_interop() const;
+    std::future<std::shared_ptr<texture>> copy_async(uint32_t source, int width, int height, int stride);
+#endif
 			
 	template<typename Func>
 	auto begin_invoke(Func&& func, task_priority priority = task_priority::normal_priority) -> std::future<decltype(func())> // noexcept

@@ -52,6 +52,11 @@ public:
 	std::future<array<const std::uint8_t>> operator()(const core::video_format_desc& format_desc, bool straighten_alpha) override;
 	core::mutable_frame create_frame(const void* tag, const core::pixel_format_desc& desc, const core::audio_channel_layout& channel_layout) override;
 
+#ifdef WIN32
+    core::mutable_frame import_d3d_texture(const void*                                tag,
+                                           const std::shared_ptr<d3d::d3d_texture2d>& d3d_texture) override;
+#endif
+
 	// core::image_mixer
 
 	void push(const core::frame_transform& frame) override;

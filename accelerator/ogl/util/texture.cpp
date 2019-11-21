@@ -135,6 +135,14 @@ public:
 		attach();		
 		GL(glClear(GL_COLOR_BUFFER_BIT));
 	}
+	
+#ifdef WIN32
+    void copy_from(int texture_id)
+	{
+        GL(glCopyImageSubData(
+            texture_id, GL_TEXTURE_2D, 0, 0, 0, 0, id_, GL_TEXTURE_2D, 0, 0, 0, 0, width_, height_, 1));
+    }
+#endif
 		
 	void copy_from(buffer& source)
 	{
@@ -170,6 +178,9 @@ void texture::bind(int index){impl_->bind(index);}
 void texture::unbind(){impl_->unbind();}
 void texture::attach(){impl_->attach();}
 void texture::clear(){impl_->clear();}
+#ifdef WIN32
+void texture::copy_from(int source) { impl_->copy_from(source); }
+#endif
 void texture::copy_from(buffer& source){impl_->copy_from(source);}
 void texture::copy_to(buffer& dest){impl_->copy_to(dest);}
 int texture::width() const { return impl_->width_; }

@@ -41,6 +41,11 @@
 
 #include <SFML/Window/Context.hpp>
 
+#ifdef WIN32
+#include "../../d3d/d3d_device.h"
+#include <GL/wglew.h>
+#endif
+
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_queue.h>
@@ -63,6 +68,11 @@ struct device::impl : public std::enable_shared_from_this<impl>
 
 	std::unique_ptr<sf::Context> device_;
 	
+#ifdef WIN32
+    std::shared_ptr<d3d::d3d_device> d3d_device_;
+    std::shared_ptr<void>            interop_handle_;
+#endif
+	
 	std::array<tbb::concurrent_unordered_map<std::size_t, tbb::concurrent_bounded_queue<std::shared_ptr<texture>>>, 8>	device_pools_;
 	std::array<tbb::concurrent_unordered_map<std::size_t, tbb::concurrent_bounded_queue<std::shared_ptr<buffer>>>, 2>	host_pools_;
 	
@@ -84,13 +94,29 @@ struct device::impl : public std::enable_shared_from_this<impl>
 						
 			if (glewInit() != GLEW_OK)
 				CASPAR_THROW_EXCEPTION(gl::ogl_exception() << msg_info("Failed to initialize GLEW."));
-		
-			if(!GLEW_VERSION_3_0)
+#ifdef WIN32
+			if (wglewInit() != GLEW_OK)
+				CASPAR_THROW_EXCEPTION(gl::ogl_exception() << msg_info("Failed to initialize WGLEW."));
+#endif
+
+			if(!GLEW_VERSION_4_3)
 				CASPAR_THROW_EXCEPTION(not_supported() << msg_info("Your graphics card does not meet the minimum hardware requirements since it does not support OpenGL 3.0 or higher."));
 	
 			glGenFramebuffers(1, &fbo_);				
 			glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+			
+#ifdef WIN32
+		d3d_device_ = d3d::d3d_device::get_device();
+        if (d3d_device_) {
+            interop_handle_ = std::shared_ptr<void>(wglDXOpenDeviceNV(d3d_device_->device()), [](void* p) {
+ 				if (p)
+                    wglDXCloseDeviceNV(p);
+            });
 
+            if (!interop_handle_)
+                CASPAR_THROW_EXCEPTION(gl::ogl_exception() << msg_info("Failed to initialize d3d interop."));
+        }
+#endif
 		});
 				
 		CASPAR_LOG(info) << L"Successfully initialized OpenGL " << version();
@@ -405,6 +431,44 @@ struct device::impl : public std::enable_shared_from_this<impl>
 		};
 		return std::async(std::launch::deferred, std::move(cmd));
 	}
+	
+#ifdef WIN32
+    std::future<std::shared_ptr<texture>> copy_async(uint32_t source, int width, int height, int stride)
+    {
+		if (!executor_.is_current())
+			CASPAR_THROW_EXCEPTION(invalid_operation() << msg_info("Operation only valid in an OpenGL Context."));
+
+        auto tex = create_texture(width, height, stride, false, false); // TODO - mipmap?
+
+        tex->copy_from(source);
+
+        auto fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+
+        GL(glFlush());
+
+		auto self = shared_from_this();
+		auto context = get_context();
+		auto cmd = [self, tex, context, fence]() mutable->std::shared_ptr<texture>
+		{
+			self->executor_.invoke([&tex, &context, &fence] // Defer blocking call until data is needed.
+				{
+					caspar::timer timer;
+
+					// TODO - smarter timeout?
+					if (GL2(glClientWaitSync(fence, 0, 1000000000)) == GL_TIMEOUT_EXPIRED) {
+						CASPAR_LOG(warning) << L"[copy_async] Fence wait timed out";
+					}
+
+					GL(glDeleteSync(fence));
+
+					if (timer.elapsed() > 0.02)
+						CASPAR_LOG(warning) << L"[buffer] Performance warning. Texture copy blocked: " << timer.elapsed();
+				});
+			return tex;
+		};
+		return std::async(std::launch::deferred, std::move(cmd));
+    }
+#endif
 
 	std::future<void> gc()
 	{
@@ -462,7 +526,12 @@ std::future<void>							device::gc() { return impl_->gc(); }
 boost::property_tree::wptree				device::info() const { return impl_->info(); }
 std::wstring								device::version() const{return impl_->version();}
 
+#ifdef WIN32
+std::shared_ptr<void>                 device::d3d_interop() const { return impl_->interop_handle_; }
+std::future<std::shared_ptr<texture>> device::copy_async(uint32_t source, int width, int height, int stride)
+{
+    return impl_->copy_async(source, width, height, stride);
+}
+#endif
 
 }}}
-
-
