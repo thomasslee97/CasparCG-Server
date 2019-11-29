@@ -584,7 +584,7 @@ spl::shared_ptr<core::frame_producer> create_psd_scene_producer(const core::fram
 							adjusted_format_desc.time_scale *= adjusted_format_desc.field_count;
 							adjusted_format_desc.framerate *= adjusted_format_desc.field_count;
 							adjusted_format_desc.field_count = 1;
-							adjusted_format_desc.audio_cadence = core::find_audio_cadence(adjusted_format_desc.framerate);
+							adjusted_format_desc.audio_cadence = adjusted_dependencies.format_repository.find_audio_cadence(adjusted_format_desc.framerate);
 
 							auto producer_name = layer_name;
 							if (psd_layer->is_cg_producer()) {

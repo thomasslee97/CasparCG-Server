@@ -486,9 +486,10 @@ std::wstring loadbg_command(command_context& ctx)
     auto channel = ctx.channel.raw_channel;
 	bool auto_play = contains_param(L"AUTO", ctx.parameters);
 
+	auto deps = get_producer_dependencies(channel, ctx);
 	try {
 		auto pFP =
-			ctx.static_context->producer_registry->create_producer(get_producer_dependencies(channel, ctx), ctx.parameters);
+			ctx.static_context->producer_registry->create_producer(deps, ctx.parameters);
 
 		if (pFP == frame_producer::empty())
 			CASPAR_THROW_EXCEPTION(file_not_found() << msg_info(ctx.parameters.size() > 0 ? ctx.parameters[0] : L""));
@@ -514,7 +515,7 @@ std::wstring loadbg_command(command_context& ctx)
 		ctx.channel.stage->load(ctx.layer_index(), transition_producer, false, auto_play); // TODO: LOOP
 	} catch (file_not_found&) {
 		if (contains_param(L"CLEAR_ON_404", ctx.parameters)) {
-			ctx.channel.stage->load(ctx.layer_index(), core::create_color_producer(ctx.channel.raw_channel->frame_factory(), 0), false, auto_play);
+			ctx.channel.stage->load(ctx.layer_index(), core::create_color_producer_simple(deps, L"EMPTY"), false, auto_play);
 		}
 		throw;
 	}
@@ -545,14 +546,14 @@ std::wstring load_command(command_context& ctx)
 		// Must be a promoting load
 		ctx.channel.stage->preview(ctx.layer_index());
 	} else {
+		auto deps = get_producer_dependencies(ctx.channel.raw_channel, ctx);
 		try {
-			auto pFP = ctx.static_context->producer_registry->create_producer(
-				get_producer_dependencies(ctx.channel.raw_channel, ctx), ctx.parameters);
+			auto pFP = ctx.static_context->producer_registry->create_producer(deps, ctx.parameters);
 			auto pFP2 = create_transition_producer(ctx.channel.raw_channel->video_format_desc().field_mode, pFP, transition_info{});
 			ctx.channel.stage->load(ctx.layer_index(), pFP2, true);
 		} catch (file_not_found&) {
 			if (contains_param(L"CLEAR_ON_404", ctx.parameters)) {
-				ctx.channel.stage->load(ctx.layer_index(), core::create_color_producer(ctx.channel.raw_channel->frame_factory(), 0), true);
+				ctx.channel.stage->load(ctx.layer_index(), core::create_color_producer_simple(deps, L"EMPTY"), true);
 			}
 			throw;
 		}

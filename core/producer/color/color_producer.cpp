@@ -275,6 +275,11 @@ void describe_color_producer(core::help_sink& sink, const core::help_repository&
 		L"For a 45 degree gradient covering the screen.");
 }
 
+spl::shared_ptr<frame_producer> create_color_producer_simple(const frame_producer_dependencies& dependencies, const std::wstring& value)
+{
+	return spl::make_shared<color_producer>(dependencies.frame_factory, value, dependencies.format_desc.width, dependencies.format_desc.height);
+}
+
 spl::shared_ptr<frame_producer> create_color_producer(const frame_producer_dependencies& dependencies, const std::vector<std::wstring>& params)
 {
 	if(params.size() == 0)
