@@ -1,5 +1,10 @@
 C H A N G E S
 
+CasparCG 2.1.10 NRK (w.r.t 2.1.9 NRK)
+==========================================
+
+  o Fix invalid OpenGL call causing crash at startup on non-Nvidia GPU
+
 CasparCG 2.1.9 NRK (w.r.t 2.1.8 NRK)
 ==========================================
 
