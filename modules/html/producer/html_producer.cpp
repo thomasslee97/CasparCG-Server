@@ -708,7 +708,26 @@ spl::shared_ptr<core::frame_producer> create_cg_producer(
 	const core::frame_producer_dependencies& dependencies,
 	const std::vector<std::wstring>& params)
 {
-	const auto filename = env::template_folder() + params.at(0) + L".html";
+	std::wstring query = L"";
+	std::wstring file;
+	std::wstring fileSearch = params.at(0);
+	const auto hasQuery = fileSearch.find_first_of(L"?");
+	const auto hasFragment = fileSearch.find_first_of(L"#");
+	if (std::wstring::npos != hasQuery)
+	{
+		file = fileSearch.substr(0, hasQuery);
+		query = L"?" + fileSearch.substr(hasQuery + 1);
+	}
+	else if (std::wstring::npos != hasFragment) {
+		file = fileSearch.substr(0, hasFragment);
+		query = L"#" + fileSearch.substr(hasFragment + 1);
+	}
+	else
+	{
+		file = fileSearch;
+	}
+
+	const auto filename = env::template_folder() + file + L".html";
 	const auto found_filename = find_case_insensitive(filename);
 	const auto http_prefix = boost::algorithm::istarts_with(params.at(0), L"http:") || boost::algorithm::istarts_with(params.at(0), L"https:");
 
