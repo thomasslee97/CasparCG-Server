@@ -677,6 +677,23 @@ std::wstring clear_command(command_context& ctx)
     return L"202 CLEAR OK\r\n";
 }
 
+void clear_all_describer(core::help_sink& sink, const core::help_repository& repo)
+{
+	sink.short_description(L"Clears all channels.");
+	sink.syntax(L"CLEAR ALL");
+	sink.para()->text(L"Removes all clips (both foreground and background) from all channels.");
+	sink.para()->text(L"Example:");
+	sink.example(L">> CLEAR ALL", L"clears everything from all channels.");
+}
+
+std::wstring clear_all_command(command_context& ctx)
+{
+	for (size_t n = 0; n < ctx.channels.size(); ++n)
+		ctx.channels.at(n).stage->clear();
+
+	return L"202 CLEAR ALL OK\r\n";
+}
+
 void call_describer(core::help_sink& sink, const core::help_repository& repo)
 {
     sink.short_description(L"Call a method on a producer.");
@@ -3331,6 +3348,7 @@ void register_commands(std::shared_ptr<amcp_command_repository_wrapper>& repo)
     repo->register_channel_command(L"Basic Commands", L"ADD", add_describer, add_command, 1);
     repo->register_channel_command(L"Basic Commands", L"REMOVE", remove_describer, remove_command, 0);
     repo->register_channel_command(L"Basic Commands", L"PRINT", print_describer, print_command, 0);
+	repo->register_command(L"Basic Commands", L"CLEAR ALL", clear_all_describer, clear_all_command, 0);
     repo->register_command(L"Basic Commands", L"LOG LEVEL", log_level_describer, log_level_command, 1);
     repo->register_command(L"Basic Commands", L"LOG CATEGORY", log_category_describer, log_category_command, 2);
     repo->register_channel_command(L"Basic Commands", L"SET", set_describer, set_command, 2);
