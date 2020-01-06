@@ -222,28 +222,43 @@ private:
 	{
 		using namespace boost::filesystem;
 
-		auto basepath = path(env::template_folder()) / path(filename);
-
-		boost::lock_guard<boost::mutex> lock(mutex_);
-
-		for (auto& rec : records_by_extension_)
-		{
-			auto p = path(basepath.wstring() + rec.first);
-
-			if (find_case_insensitive(p.wstring()))
-				return rec.second;
-		}
-
+		// Check if URL first
 		auto protocol = caspar::protocol_split(filename).at(0);
 		if (!protocol.empty())
 		{
 			auto ext = path(filename).extension().wstring();
+
+		for (auto& rec : records_by_extension_)
+		{
+				if (rec.first == ext)
+				return rec.second;
+		}
+		}
+
+		std::wstring file;
+		const auto hasQuery = filename.find_first_of(L"?");
+		const auto hasFragment = filename.find_first_of(L"#");
+		if (std::wstring::npos != hasQuery)
+		{
+			file = filename.substr(0, hasQuery);
+		}
+		else if (std::wstring::npos != hasFragment) {
+			file = filename.substr(0, hasFragment);
+		}
+		else {
+			file = filename;
+		}
+
+		auto basepath = path(env::template_folder()) / path(file);
+
+		boost::lock_guard<boost::mutex> lock(mutex_);
 			
 			for (auto& rec : records_by_extension_)
 			{
-				if (rec.first == ext)
+			auto p = path(basepath.wstring() + rec.first);
+
+			if (find_case_insensitive(p.wstring()))
 					return rec.second;
-			}
 		}
 
 		return boost::none;
