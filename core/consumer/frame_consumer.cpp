@@ -92,18 +92,20 @@ class destroy_consumer_proxy : public frame_consumer
 
     ~destroy_consumer_proxy()
     {
-        static tbb::atomic<int> counter;
+        static std::atomic<int> counter;
         static std::once_flag   counter_init_once;
         std::call_once(counter_init_once, [] { counter = 0; });
 
         if (!destroy_consumers_in_separate_thread())
             return;
 
+		auto str = consumer_->print();
         ++counter;
-        CASPAR_VERIFY(counter < 8);
+		CASPAR_LOG(debug) << str << L"Counter is " << (int) counter;
+		CASPAR_VERIFY(counter < 8);
 
-        auto consumer = new std::shared_ptr<frame_consumer>(std::move(consumer_));
-        boost::thread([=] {
+		auto consumer = new std::shared_ptr<frame_consumer>(std::move(consumer_));
+        std::thread([=] {
             std::unique_ptr<std::shared_ptr<frame_consumer>> pointer_guard(consumer);
             auto                                             str = (*consumer)->print();
 
@@ -119,6 +121,7 @@ class destroy_consumer_proxy : public frame_consumer
             }
 
             pointer_guard.reset();
+			counter--;
 
         })
             .detach();
