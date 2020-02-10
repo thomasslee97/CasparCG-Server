@@ -24,7 +24,7 @@ export HELP
 default:
 	@echo "$${HELP}"
 
-build: build_base build_casparcg
+build: build-base build-casparcg
 
 build-base:
 	echo ${CASPARCG_VERSION}
