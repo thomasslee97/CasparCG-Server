@@ -58,7 +58,7 @@ RUN apt-get update \
 	libx265-dev \
  	libgnutls28-dev \
 	libatk-bridge2.0-dev \
-	libatspi-2.0-dev \
+	libatspi2.0-dev \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=casparcg/ffmpeg:master-acdea9e-2 /opt/ffmpeg /opt/ffmpeg

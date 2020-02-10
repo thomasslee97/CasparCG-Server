@@ -69,6 +69,6 @@ cp -f ../README "$SERVER_FOLDER/" || fail "Could not copy README"
 cp -f ../LICENSE "$SERVER_FOLDER/" || fail "Could not copy LICENSE"
 
 # Create tar.gz file
-echo Creating tag.gz...
+echo Creating tar.gz...
 tar -cvzf "$BUILD_ARCHIVE_NAME.tar.gz" "$SERVER_FOLDER" || fail "Could not create archive"
 
