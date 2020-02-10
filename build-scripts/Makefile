@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 DATE := $(shell date +'%Y%m%d%H%M')
 GIT_HASH := $(shell git rev-parse --verify --short HEAD)
-CASPARCG_VERSION := $(shell git branch | sed -n -e 's/^\* \(.*\)/\1/p')
+CASPARCG_VERSION := $(shell git branch | sed -n -e 's/^\* \(.*\)/\1/p' | sed -r 's/[^a-z0-9]+/-/gi')
 
 define HELP
 targets:
@@ -27,18 +27,17 @@ default:
 build: build_base build_casparcg
 
 build-base:
+	echo ${CASPARCG_VERSION}
 	pushd ../ >/dev/null && docker build \
-	--build-arg http_proxy="${http_proxy}" \
-	--build-arg https_proxy="${https_proxy}" \
-	--build-arg GIT_HASH="${GIT_HASH}" \
 	-f build-scripts/linux/base/Dockerfile \
 	-t "casparcg_base:${CASPARCG_VERSION}" \
-	$${PWD}
+	build-scripts/linux/base
 
 build-casparcg:
-	pushd linux/casparcg/ >/dev/null && docker build \
+	pushd ../ >/dev/null && docker build \
 	--build-arg casparcg_from="casparcg_base:${CASPARCG_VERSION}" \
 	--build-arg GIT_HASH="${GIT_HASH}" \
+	-f build-scripts/linux/casparcg/Dockerfile \
 	-t "casparcg_build:${CASPARCG_VERSION}" \
 	$${PWD}
 

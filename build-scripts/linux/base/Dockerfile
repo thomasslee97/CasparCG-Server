@@ -1,10 +1,4 @@
-FROM buildpack-deps:trusty
-
-ARG maintainer=mark.himsley@bbc.co.uk
-LABEL maintainer=${maintainer}
-
-ENV http_proxy=${http_proxy} \
-    https_proxy=${https_proxy}
+FROM buildpack-deps:bionic
 
 # The following best practices page says do not use 'apt-get -y upgrade'
 # It also says to execute 'rm -rf /var/lib/apt/lists/*' at the end of the install
@@ -60,16 +54,12 @@ RUN apt-get update \
 	libxss1 \
 	libgtk2.0-0 \
 	libssl1.0.0 \
+	libglfw3-dev \
+	libx265-dev \
+ 	libgnutls28-dev \
+	libatk-bridge2.0-dev \
+	libatspi-2.0-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# only available in bionic
-#	libglfw3-dev \
-#	libx265-dev \
-# Conflicts with gnutls-dev
-# 	libgnutls28-dev \
-
-WORKDIR /opt/casparcg
-
 COPY --from=casparcg/ffmpeg:master-acdea9e-2 /opt/ffmpeg /opt/ffmpeg
-
-COPY ./ /opt/casparcg/
+# COPY --from=casparcg/cef:3.3578.1870-1 /opt/cef /opt/cef

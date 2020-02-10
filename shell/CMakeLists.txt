@@ -34,6 +34,11 @@ set(HEADERS
 )
 
 add_executable(casparcg ${SOURCES} ${HEADERS} ${OS_SPECIFIC_SOURCES})
+if (CMAKE_COMPILER_IS_GNUCXX)
+	target_link_libraries(casparcg
+		-no-pie # Don't produce a position independent executable
+	)
+endif ()
 add_precompiled_header(casparcg stdafx.h FORCEINCLUDE)
 
 include_directories(..)

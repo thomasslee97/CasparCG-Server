@@ -99,12 +99,15 @@ else()
 			avdevice.so
 			swscale.so
 			swresample.so
+			avresample.so
 			postproc.so
 
 			ass
 			bluray
+			bz2
 			crypto
 			expat
+			fdk-aac
 			fontconfig
 			fribidi
 			gmp
@@ -112,6 +115,7 @@ else()
 			gsm
 			# hogweed
 			# ilbc
+			lzma
 			modplug
 			mp3lame
 			# nettle
@@ -127,8 +131,15 @@ else()
 			vorbis
 			vorbisenc
 			vpx
+			webp
+			webpmux
 			x264
+			x265
 			# xavs
+			xcb
+			xcb-shape
+			xcb-shm
+			xcb-xfixes
 			xvidcore
 			z
 			-Wl,--end-group
