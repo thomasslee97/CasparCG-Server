@@ -1,5 +1,20 @@
 C H A N G E S
 
+CasparCG 2.1.11 NRK (w.r.t 2.1.10 NRK)
+==========================================
+
+  o Text masks for PSD producer and various fixes. More details: #21 (Sponsored by didikunz and Media Support)
+
+  o Upgrade CEF to Chromium71 and improve gpu acceleration performance (disabled by default)
+
+  o Fix WIPE transition directions
+
+  o Allow query and fragment to be used with local html templates
+
+  o Add CLEAR ALL commad to clear all channels
+
+  o Fix bad counter causing crash after removing 8 consumers
+
 CasparCG 2.1.10 NRK (w.r.t 2.1.9 NRK)
 ==========================================
 
