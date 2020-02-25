@@ -30,6 +30,7 @@
 #include "shader.h"
 
 #include <common/assert.h>
+#include <common/env.h>
 #include <common/except.h>
 #include <common/future.h>
 #include <common/array.h>
@@ -106,7 +107,10 @@ struct device::impl : public std::enable_shared_from_this<impl>
 			glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 			
 #ifdef WIN32
-		d3d_device_ = d3d::d3d_device::get_device();
+		const bool enable_d3d_interop = env::properties().get(L"configuration.html.enable-gpu", false);
+		if (enable_d3d_interop) {
+			d3d_device_ = d3d::d3d_device::get_device();
+		}
         if (d3d_device_) {
             interop_handle_ = std::shared_ptr<void>(wglDXOpenDeviceNV(d3d_device_->device()), [](void* p) {
  				if (p)
