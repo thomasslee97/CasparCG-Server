@@ -62,12 +62,6 @@ cp -Rf ../deploy/general/server/media "$SERVER_FOLDER/" || fail "Could not copy 
 cp -Rf ../deploy/general/server/template "$SERVER_FOLDER/" || fail "Could not copy template"
 cp -Rf ../deploy/general/server/font "$SERVER_FOLDER/" || fail "Could not copy font"
 
-# Copy documentation
-echo Copying documentation...
-cp -f ../CHANGELOG "$SERVER_FOLDER/" || fail "Could not copy CHANGELOG"
-cp -f ../README "$SERVER_FOLDER/" || fail "Could not copy README"
-cp -f ../LICENSE "$SERVER_FOLDER/" || fail "Could not copy LICENSE"
-
 # Create tar.gz file
 echo Creating tar.gz...
 tar -cvzf "$BUILD_ARCHIVE_NAME.tar.gz" "$SERVER_FOLDER" || fail "Could not create archive"
